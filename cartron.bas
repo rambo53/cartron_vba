@@ -4,16 +4,6 @@
 Sub Bouton1_Cliquer()
     
 	' --- CONSTANTES ---
-    Const MsgId As String = "SARL CARTRO"
-    Const Grpg As String  = "MIXD"
-    Const Nm As String = "SARL CARTRON"
-    Const PmtMtd As String = "TRF"
-    Const CdPmt As String = "SEPA"
-    Const AdrLine As String = "1 RUE DU GENERAL BARON FABRE 56000 VANNES"
-    Const Ctry As String = "FR"
-    Const IBAN_cartron As String = "FR7615589569890336821614074"
-    Const BIC_cartron As String = "CMBRFR2BARK"
-    Const ChrgBr As String = "SLEV"
     Const CdRgltry As String = "NNN"
 	Const directory_in_name As String = "fichier_a_traiter"
 	Const directory_out_name As String = "fichier_genere"
@@ -22,6 +12,8 @@ Sub Bouton1_Cliquer()
 	Const IBAN As String = "IBAN"
 	Const RIB As String = "RIB"
 	Const BIC As String = "BIC"
+	Const xml_name As String = "bank_file.xml"
+	Const credit As String = "Crédit"
 	' --- CONSTANTES ---
 	
 	Dim new_columns As Variant
@@ -40,10 +32,6 @@ Sub Bouton1_Cliquer()
     Dim col_to_inject_bic As Long
     Dim PlageRecherche As Range
     Dim Col_correspondance As String
-    Dim table_correspondance_intitule As Long
-    Dim table_correspondance_iban As Long
-    Dim table_correspondance_rib As Long
-    Dim table_correspondance_bic As Long
     Dim PlageGlobale As Range
     Dim PlageVisibles As Range
 	Dim Cellule_libelle As Range
@@ -57,6 +45,7 @@ Sub Bouton1_Cliquer()
 	Dim Cellule_IBAN As Range
 	Dim Cellule_RIB As Range
 	Dim Cellule_BIC As Range
+	Dim CheminDossierOut As String
 	
 	new_columns = Array(libelle_clean, key_table, IBAN, RIB, BIC)
     export_achat_libelle = "Libellé"
@@ -69,10 +58,6 @@ Sub Bouton1_Cliquer()
     Col_correspondance = "correspondance_coala"
     table_correspondance_name = "table_correspondance"
     export_achat_name = "export_achat"
-    table_correspondance_intitule = -6
-    table_correspondance_iban = -4
-    table_correspondance_rib = -3
-    table_correspondance_bic = -2
 	
 	Set ClasseurPrincipal = ThisWorkbook
 	CheminDossierPrincipal = ClasseurPrincipal.Path
@@ -100,7 +85,7 @@ Sub Bouton1_Cliquer()
 	' Définir la zone de recherche dans la table de correspondance
 	Set PlageRecherche = Plage_to_check(Cellule_correspondance, table_correspondance, table_correspondance_name, row_to_start)
 	
-	' SUB
+	' SUB création des nouvelles colonnes dans l'export_achat
 	create_columns new_columns, export_achat
 	
 	Set Cellule_libelle_clean = letter_colonne(libelle_clean, export_achat)
@@ -109,8 +94,11 @@ Sub Bouton1_Cliquer()
 	Set Cellule_RIB = letter_colonne(RIB, export_achat)
 	Set Cellule_BIC = letter_colonne(BIC, export_achat)
 	
-	'SUB
+	'SUB génération de la matrice complétée
 	generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC
+	
+	' SUB génération du Xml
+	generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB
     
     MsgBox "Xml validé et généré.", vbInformation
 End Sub
@@ -293,4 +281,286 @@ Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_li
     Application.Calculation = xlCalculationAutomatic
     Application.ScreenUpdating = True	
 	
+End Sub
+
+
+Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_RIB As Range, start_row As Long, credit As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String)
+	Const NS_PAIN001 As String = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.02"
+	Const MsgId_cartron As String = "SARL CARTRO"
+	Const Grpg_cartron As String  = "MIXD"
+	Const Nm_cartron As String = "SARL CARTRON"
+	Const Siret_cartron As String = "33517450400019"
+	Const PmtMtd_cartron As String = "TRF"
+	Const CdPmt As String = "SEPA"
+	Const AdrLine_cartron As String = "1 RUE DU GENERAL BARON FABRE 56000 VANNES"
+	Const IBAN_cartron As String = "FR7615589569890336821614074"
+	Const BIC_cartron As String = "CMBRFR2BARK"
+	Const ChrgBr_cartron As String = "SLEV"
+
+	Dim Plage_rib As Range
+	Dim plage_cellule_rib As Range
+	Dim texte_cell As String
+	Dim r As Long
+	Dim valeur_credit As Double
+	Dim ColCreditNum As Long
+	Dim CheminFichier As String
+	CheminFichier = CheminDossierOut & xml_name
+	
+	Dim DocXml As Object
+	Set DocXml = CreateObject("MSXML2.DOMDocument")
+	
+	' Entête XML (Ligne obligatoire : <?xml version="1.0" encoding="UTF-8"?>)
+    Set ProcInstr = DocXml.createProcessingInstruction("xml", "version=""1.0"" encoding=""UTF-8""")
+    DocXml.appendChild ProcInstr
+    
+    ' Création de la balise Racine (Le conteneur principal)
+    Set Racine = DocXml.createNode(1, "Document", NS_PAIN001)
+    DocXml.appendChild Racine
+	
+	Dim pain As Object
+    Set pain = DocXml.createNode(1, "pain.001.001.02", NS_PAIN001)
+    Racine.appendChild pain
+	
+	Dim GrpHdr As Object
+    Set GrpHdr = DocXml.createNode(1, "GrpHdr", NS_PAIN001)
+    pain.appendChild GrpHdr
+	
+	
+	Dim MsgId As Object
+    Set MsgId = DocXml.createNode(1, "MsgId", NS_PAIN001)
+	MsgId.Text = MsgId_cartron & Format(Now, "ddmmyyyy-hhmmss")
+    GrpHdr.appendChild MsgId
+	
+	Dim CreDtTm As Object
+    Set CreDtTm = DocXml.createNode(1, "CreDtTm", NS_PAIN001)
+	CreDtTm.Text = Format(Now, "yyyy-mm-ddThh:mm:ss")
+    GrpHdr.appendChild CreDtTm
+	
+	Dim NbOfTxs As Object
+    Set NbOfTxs = DocXml.createNode(1, "NbOfTxs", NS_PAIN001)
+    GrpHdr.appendChild NbOfTxs
+	
+	Dim CtrlSum As Object
+    Set CtrlSum = DocXml.createNode(1, "CtrlSum", NS_PAIN001)
+    GrpHdr.appendChild CtrlSum
+	
+	Dim Grpg As Object
+    Set Grpg = DocXml.createNode(1, "Grpg", NS_PAIN001)
+	Grpg.Text = Grpg_cartron
+    GrpHdr.appendChild Grpg
+	
+	Dim InitgPty As Object
+    Set InitgPty = DocXml.createNode(1, "InitgPty", NS_PAIN001)
+    GrpHdr.appendChild InitgPty
+
+	Dim Nm As Object
+    Set Nm = DocXml.createNode(1, "Nm", NS_PAIN001)
+	Nm.Text = Nm_cartron
+    InitgPty.appendChild Nm
+	
+	Dim Id As Object
+    Set Id = DocXml.createNode(1, "Id", NS_PAIN001)
+    InitgPty.appendChild Id
+	
+	Dim OrgId As Object
+    Set OrgId = DocXml.createNode(1, "OrgId", NS_PAIN001)
+    Id.appendChild OrgId
+	
+	Dim PrtryId As Object
+    Set PrtryId = DocXml.createNode(1, "PrtryId", NS_PAIN001)
+    OrgId.appendChild PrtryId
+	
+	Dim IdSiret As Object
+    Set IdSiret = DocXml.createNode(1, "IdSiret", NS_PAIN001)
+	IdSiret.Text = Siret_cartron
+    PrtryId.appendChild IdSiret
+	
+	Dim PmtInf As Object
+    Set PmtInf = DocXml.createNode(1, "PmtInf", NS_PAIN001)
+    pain.appendChild PmtInf
+	
+	Dim PmtInfId As Object
+    Set PmtInfId = DocXml.createNode(1, "PmtInfId", NS_PAIN001)
+	PmtInfId.Text = Nm_cartron & Format(Now, "yymmddhhmmssfff")
+    PmtInf.appendChild PmtInfId
+	
+	Dim PmtMtd As Object
+    Set PmtMtd = DocXml.createNode(1, "PmtMtd", NS_PAIN001)
+	PmtMtd.Text = PmtMtd_cartron
+    PmtInf.appendChild PmtMtd
+	
+	Dim PmtTpInf As Object
+    Set PmtTpInf = DocXml.createNode(1, "PmtTpInf", NS_PAIN001)
+    PmtInf.appendChild PmtTpInf
+	
+	Dim SvcLvl As Object
+    Set SvcLvl = DocXml.createNode(1, "SvcLvl", NS_PAIN001)
+    PmtTpInf.appendChild SvcLvl
+	
+	Dim Cd As Object
+    Set Cd = DocXml.createNode(1, "Cd", NS_PAIN001)
+	Cd.Text = CdPmt
+    SvcLvl.appendChild Cd
+	
+	Dim ReqdExctnDt As Object
+    Set ReqdExctnDt = DocXml.createNode(1, "ReqdExctnDt", NS_PAIN001)
+	ReqdExctnDt.Text = Format(Now, "yyyy-mm-dd")
+    PmtInf.appendChild ReqdExctnDt
+	
+	Dim Dbtr As Object
+    Set Dbtr = DocXml.createNode(1, "Dbtr", NS_PAIN001)
+    PmtInf.appendChild Dbtr
+	
+	Dim NmDbtr As Object
+    Set NmDbtr = DocXml.createNode(1, "Nm", NS_PAIN001)
+	NmDbtr.Text = Nm_cartron
+    Dbtr.appendChild NmDbtr
+	
+	Dim PstlAdr As Object
+    Set PstlAdr = DocXml.createNode(1, "PstlAdr", NS_PAIN001)
+    Dbtr.appendChild PstlAdr
+	
+	Dim AdrLine As Object
+    Set AdrLine = DocXml.createNode(1, "AdrLine", NS_PAIN001)
+	AdrLine.Text = AdrLine_cartron
+    PstlAdr.appendChild AdrLine
+	
+	Dim Ctry As Object
+    Set Ctry = DocXml.createNode(1, "Ctry", NS_PAIN001)
+	Ctry.Text = Left(IBAN_cartron, 2)
+    PstlAdr.appendChild Ctry
+	
+	Dim DbtrAcct As Object
+    Set DbtrAcct = DocXml.createNode(1, "DbtrAcct", NS_PAIN001)
+    PmtInf.appendChild DbtrAcct
+	
+	Dim IdDbtr As Object
+    Set IdDbtr = DocXml.createNode(1, "Id", NS_PAIN001)
+    DbtrAcct.appendChild IdDbtr
+	
+	Dim IBAN As Object
+    Set IBAN = DocXml.createNode(1, "IBAN", NS_PAIN001)
+	IBAN.Text = IBAN_cartron
+    IdDbtr.appendChild IBAN
+	
+	Dim DbtrAgt As Object
+    Set DbtrAgt = DocXml.createNode(1, "DbtrAgt", NS_PAIN001)
+    PmtInf.appendChild DbtrAgt
+	
+	Dim FinInstnId As Object
+    Set FinInstnId = DocXml.createNode(1, "FinInstnId", NS_PAIN001)
+    DbtrAgt.appendChild FinInstnId
+	
+	Dim BIC As Object
+    Set BIC = DocXml.createNode(1, "BIC", NS_PAIN001)
+	BIC.Text = BIC_cartron
+    FinInstnId.appendChild BIC
+	
+	Dim ChrgBr As Object
+    Set ChrgBr = DocXml.createNode(1, "ChrgBr", NS_PAIN001)
+	ChrgBr.Text = ChrgBr_cartron
+    PmtInf.appendChild ChrgBr
+	
+	Dim CdtTrfTxInf As Object
+	Set CdtTrfTxInf = DocXml.createNode(1, "CdtTrfTxInf", NS_PAIN001)
+	PmtInf.appendChild CdtTrfTxInf
+	
+	' boucle pour générer l'intégralité des virements à effectuer
+	Set Plage_rib = Plage_to_check(Cellule_RIB, export_achat, export_achat.Name, start_row)
+	
+	for Each plage_cellule_rib in Plage_rib
+		texte_cell = plage_cellule_rib.Value
+		r = plage_cellule_rib.Row
+		
+		ColCreditNum = letter_colonne(credit, export_achat).Column
+		' je caste en double
+		valeur_credit = CDbl(export_achat.Cells(r, ColCreditNum).Value)
+		
+		If texte_cell <> "" And valeur_credit <> 0 Then
+		
+			ColBic = letter_colonne(BIC_fournisseur, export_achat).Column
+			valeur_bic = export_achat.Cells(r, ColBic).Value
+			
+			ColKeyTable = letter_colonne(key_table, export_achat).Column
+			valeur_KeyTable = export_achat.Cells(r, ColKeyTable).Value
+			
+			ColIBAN = letter_colonne(IBAN_fournisseur, export_achat).Column
+			valeur_IBAN = export_achat.Cells(r, ColIBAN).Value
+			
+			ColRIB = letter_colonne(RIB_fournisseur, export_achat).Column
+			valeur_RIB = export_achat.Cells(r, ColRIB).Value
+		
+			Dim PmtId As Object
+			Set PmtId = DocXml.createNode(1, "PmtId", NS_PAIN001)
+			CdtTrfTxInf.appendChild PmtId
+			
+			Dim InstrId As Object
+			Set InstrId = DocXml.createNode(1, "InstrId", NS_PAIN001)
+			InstrId.Text = "" 'Voir quelle valeur et quelle condition pour affichage
+			PmtId.appendChild InstrId
+			
+			Dim EndToEndId As Object
+			Set EndToEndId = DocXml.createNode(1, "EndToEndId", NS_PAIN001)
+			EndToEndId.Text = "" 'Voir quelle valeur et quelle condition pour affichage
+			PmtId.appendChild EndToEndId
+			
+			Dim Amt As Object
+			Set Amt = DocXml.createNode(1, "Amt", NS_PAIN001)
+			CdtTrfTxInf.appendChild Amt
+			
+			Dim InstdAmt As Object
+			Set InstdAmt = DocXml.createNode(1, "InstdAmt", NS_PAIN001)
+			InstdAmt.setAttribute "Ccy", "EUR"
+			InstdAmt.Text = Replace(CStr(valeur_credit), ",", ".")
+			Amt.appendChild InstdAmt
+			
+			Dim CdtrAgt As Object
+			Set CdtrAgt = DocXml.createNode(1, "CdtrAgt", NS_PAIN001)
+			CdtTrfTxInf.appendChild CdtrAgt
+			
+			Dim FinInstnId_fournisseur As Object
+			Set FinInstnId_fournisseur = DocXml.createNode(1, "FinInstnId", NS_PAIN001)
+			CdtrAgt.appendChild FinInstnId_fournisseur
+			
+			Dim BIC_payment As Object
+			Set BIC_payment = DocXml.createNode(1, "BIC", NS_PAIN001)
+			BIC_payment.Text = valeur_bic
+			FinInstnId_fournisseur.appendChild BIC_payment
+			
+			Dim Cdtr As Object
+			Set Cdtr = DocXml.createNode(1, "Cdtr", NS_PAIN001)
+			CdtTrfTxInf.appendChild Cdtr
+			
+			Dim Nm_fournisseur As Object
+			Set Nm_fournisseur = DocXml.createNode(1, "Nm", NS_PAIN001)
+			Nm_fournisseur.Text = valeur_KeyTable
+			Cdtr.appendChild Nm_fournisseur
+			
+			Dim PstlAdr_fournisseur As Object
+			Set PstlAdr_fournisseur = DocXml.createNode(1, "PstlAdr", NS_PAIN001)
+			Cdtr.appendChild PstlAdr_fournisseur
+			
+			
+			Dim Ctry_fournisseur As Object
+			Set Ctry_fournisseur = DocXml.createNode(1, "Ctry", NS_PAIN001)
+			Ctry_fournisseur.Text = Left(valeur_IBAN, 2)
+			PstlAdr_fournisseur.appendChild Ctry_fournisseur
+			
+			Dim CdtrAcct_fournisseur As Object
+			Set CdtrAcct_fournisseur = DocXml.createNode(1, "CdtrAcct", NS_PAIN001)
+			CdtTrfTxInf.appendChild CdtrAcct_fournisseur
+			
+			Dim Id_fournisseur As Object
+			Set Id_fournisseur = DocXml.createNode(1, "Id", NS_PAIN001)
+			CdtrAcct_fournisseur.appendChild Id_fournisseur
+			
+			Dim iban_payment As Object
+			Set iban_payment = DocXml.createNode(1, "IBAN", NS_PAIN001)
+			iban_payment.Text = valeur_IBAN & valeur_RIB
+			Id_fournisseur.appendChild iban_payment
+			
+		End If
+	Next plage_cellule_rib
+	
+	DocXml.Save CheminFichier
 End Sub
