@@ -1,44 +1,3 @@
-	
-	' Activer le filtre automatique si ce n'est pas déjà fait
-    If Not export_achat.AutoFilterMode Then export_achat.Range("A1").AutoFilter
-    
-    ' Filtrer la colonne 1 (colonne A) pour masquer les vides
-    ' "<>" indique à Excel d'ignorer les cellules vides
-	Set PlageGlobale = export_achat.Range(export_achat.Cells(1, 1), export_achat.Cells(DerniereLigne, col_to_inject_bic))
-    PlageGlobale.AutoFilter Field:=col_to_inject_rib, Criteria1:="<>"
-	
-	' STOCKER LE RÉSULTAT FILTRÉ DANS LA VARIABLE
-    ' On utilise On Error au cas où le filtre ne renverrait absolument aucune ligne
-    On Error Resume Next
-    Set PlageVisibles = PlageGlobale.SpecialCells(xlCellTypeVisible)
-    On Error GoTo 0
-	
-	' TRAITEMENT SUR LA VARIABLE
-    ' On vérifie d'abord que notre variable n'est pas vide
-    If Not PlageVisibles Is Nothing Then
-	
-		' on contrôle les données de notre tableau
-		
-		' On génère le grpheader du xml
-        
-        ' La boucle For Each va s'effectuer UNIQUEMENT sur les cellules visibles
-        For Each Cellule In PlageVisibles
-            
-            ' --- TON TRAITEMENT ICI ---
-            ' Exemple : On met en majuscule le résultat visible
-            
-        Next Cellule
-
-    Else
-        MsgBox "Le filtre n'a retourné aucune ligne visible.", vbExclamation
-    End If
-	
-	Application.ScreenUpdating = True
-	
-	
-	
-	
-	
 ' =========================================================================
 ' 1. PROCÉDURE PRINCIPALE (LIÉE AU BOUTON)
 ' =========================================================================
@@ -52,10 +11,17 @@ Sub Bouton1_Cliquer()
     Const CdPmt As String = "SEPA"
     Const AdrLine As String = "1 RUE DU GENERAL BARON FABRE 56000 VANNES"
     Const Ctry As String = "FR"
-    Const IBAN As String = "FR7615589569890336821614074"
-    Const BIC As String = "CMBRFR2BARK"
+    Const IBAN_cartron As String = "FR7615589569890336821614074"
+    Const BIC_cartron As String = "CMBRFR2BARK"
     Const ChrgBr As String = "SLEV"
     Const CdRgltry As String = "NNN"
+	Const directory_in_name As String = "fichier_a_traiter"
+	Const directory_out_name As String = "fichier_genere"
+	Const libelle_clean As String = "libelle_clean"
+	Const key_table As String = "key_table"
+	Const IBAN As String = "IBAN"
+	Const RIB As String = "RIB"
+	Const BIC As String = "BIC"
 	' --- CONSTANTES ---
 	
 	Dim new_columns As Variant
@@ -82,8 +48,17 @@ Sub Bouton1_Cliquer()
     Dim PlageVisibles As Range
 	Dim Cellule_libelle As Range
 	Dim Cellule_correspondance As Range
-    
-	new_columns = Array("libelle_clean", "key_table", "IBAN", "RIB", "BIC")
+	Dim CheminDossier As String
+	Dim CheminDossierIn As String
+	Dim CheminDossierPrincipal As String
+	Dim ClasseurPrincipal As Workbook
+	Dim Cellule_libelle_clean As Range
+    Dim Cellule_key_table As Range
+	Dim Cellule_IBAN As Range
+	Dim Cellule_RIB As Range
+	Dim Cellule_BIC As Range
+	
+	new_columns = Array(libelle_clean, key_table, IBAN, RIB, BIC)
     export_achat_libelle = "Libellé"
     row_to_start = 2
     col_to_inject_key_generate = 3
@@ -98,6 +73,15 @@ Sub Bouton1_Cliquer()
     table_correspondance_iban = -4
     table_correspondance_rib = -3
     table_correspondance_bic = -2
+	
+	Set ClasseurPrincipal = ThisWorkbook
+	CheminDossierPrincipal = ClasseurPrincipal.Path
+	
+	' récupération et vérification des chemins pour les fichiers de données
+	CheminDossierIn = get_path_directory(CheminDossierPrincipal, directory_in_name)
+	CheminDossierOut = get_path_directory(CheminDossierPrincipal, directory_out_name)
+	
+	inject_data_in_worbook CheminDossierIn, export_achat_name, ClasseurPrincipal
     
     ' --- APPEL DES FONCTIONS POUR DÉFINIR LA PLAGE ---
     Set export_achat = ActiveSheet
@@ -116,52 +100,17 @@ Sub Bouton1_Cliquer()
 	' Définir la zone de recherche dans la table de correspondance
 	Set PlageRecherche = Plage_to_check(Cellule_correspondance, table_correspondance, table_correspondance_name, row_to_start)
 	
+	' SUB
 	create_columns new_columns, export_achat
-	End
 	
-	'For Each NomColonne In new_columns
-		' 1. On cherche le numéro de la dernière colonne utilisée sur la ligne 1
-		'derniereColonne = export_achat.Cells(1, export_achat.Columns.Count).End(xlToLeft).Column
-		' 2. La colonne où injecter notre titre sera la suivante
-		'colonneAInjecter = derniereColonne + 1
-		' 3. On inscrit le nom de l'en-tête
-		'export_achat.Cells(1, colonneAInjecter).Value = NomColonne
-	'Next NomColonne
+	Set Cellule_libelle_clean = letter_colonne(libelle_clean, export_achat)
+	Set Cellule_key_table = letter_colonne(key_table, export_achat)
+	Set Cellule_IBAN = letter_colonne(IBAN, export_achat)
+	Set Cellule_RIB = letter_colonne(RIB, export_achat)
+	Set Cellule_BIC = letter_colonne(BIC, export_achat)
 	
-	
-	
-	
-	generate_matrice Plage_libelle, PlageRecherche
-	
-    ' --- BOUCLE DE TRAITEMENT ---
-    For Each Cellule In Plage_libelle
-        texte_cell = Cellule.Value
-
-        If texte_cell <> "" Then
-            If InStr(texte_cell, char_to_split) > 0 Then
-                TableauMorceaux = Split(texte_cell, char_to_split)
-                PremierePartie = Trim(TableauMorceaux(0))
-                Cellule.Offset(0, col_to_inject_key_generate).Value = PremierePartie
-                
-                ' LE RAPPROCHEMENT
-                Set CleTrouvee = PlageRecherche.Find(What:=PremierePartie, LookIn:=xlValues, LookAt:=xlWhole)
-                
-                If Not CleTrouvee Is Nothing Then
-                    Cellule.Offset(0, col_to_inject_key_find).Value = CleTrouvee.Offset(0, table_correspondance_intitule).Value
-                    Cellule.Offset(0, col_to_inject_iban).Value = CleTrouvee.Offset(0, table_correspondance_iban).Value
-                    Cellule.Offset(0, col_to_inject_rib).NumberFormat = "@"
-                    Cellule.Offset(0, col_to_inject_rib).Value = CleTrouvee.Offset(0, table_correspondance_rib).Value
-                    Cellule.Offset(0, col_to_inject_bic).Value = CleTrouvee.Offset(0, table_correspondance_bic).Value
-                Else
-                    Cellule.Offset(0, col_to_inject_key_find).Value = val_not_in_correspondance
-                End If
-            End If
-        End If
-    Next Cellule
-    
-    ' Réactivation d'Excel
-    'Application.Calculation = xlCalculationAutomatic
-    'Application.ScreenUpdating = True
+	'SUB
+	generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC
     
     MsgBox "Xml validé et généré.", vbInformation
 End Sub
@@ -215,6 +164,19 @@ Function Get_sheet(table_name As String) As Worksheet
 	Set Get_sheet = ws
 End Function
 
+
+Function get_path_directory(path_directory As String, path_directory_concat As String) As String
+	Dim path_to_return As String
+	Dim FSO As Object
+	path_to_return = path_directory & "\" & path_directory_concat & "\"
+	Set FSO = CreateObject("Scripting.FileSystemObject")
+	If Not FSO.FolderExists(path_to_return) Then
+        MsgBox "Erreur : Le dossier '" & path_to_return & "' est introuvable à l'emplacement :" & path_directory, vbCritical, "Dossier Manquant"
+        End
+    End If
+	get_path_directory = path_to_return
+End Function
+
 ' =========================================================================
 ' 3. SUBPROCESS
 ' =========================================================================
@@ -233,15 +195,61 @@ Sub create_columns(lst_cols As Variant, sheet_new_cols As Worksheet)
 End Sub
 
 
-Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range)
+Sub inject_data_in_worbook(path_directory As String, sheet_to_create As String, ClasseurPrincipal As Workbook)
+	Dim Dossier As Object
+	Dim Fichier As Object
+	Dim ClasseurSource As Workbook
+	Dim NomOnglet As String
+	Dim FSO As Object
+	
+	Set FSO = CreateObject("Scripting.FileSystemObject")
+	Set Dossier = FSO.GetFolder(path_directory)
+	
+	Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+	
+	For Each Fichier In Dossier.Files
+		If (InStr(Fichier.Name, ".xls") > 0) And (Left(Fichier.Name, 2) <> "~$") Then
+			' A. Ouverture de la matrice en arrière-plan
+            Set ClasseurSource = Workbooks.Open(Fichier.Path)
+			' SÉCURITÉ : Si l'onglet existe déjà, on le supprime pour éviter les doublons
+            On Error Resume Next
+            ClasseurPrincipal.Worksheets(sheet_to_create).Delete
+            On Error GoTo 0
+			' B. Création du nouvel onglet à la fin
+            Set NouvelOnglet = ClasseurPrincipal.Worksheets.Add(After:=ClasseurPrincipal.Sheets(ClasseurPrincipal.Sheets.Count))
+            NouvelOnglet.Name = sheet_to_create
+			' C. Copie des données
+            ClasseurSource.Sheets(1).UsedRange.Copy Destination:=NouvelOnglet.Range("A1")
+            ' D. Fermeture de la matrice
+            ClasseurSource.Close SaveChanges:=False
+		End If
+	Next Fichier
+	
+	Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+End Sub
+
+
+Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_libelle_clean As Range, Cellule_key_table As Range, Cellule_IBAN As Range, Cellule_RIB As Range, Cellule_BIC As Range)
 	Const val_not_in_correspondance As String = "##"
 	Const char_to_split As String = " ech "
+	Const intitule As String = "Intitulé"
+	Const IBAN As String = "IBAN"
+	Const RIB As String = "RIB"
+	Const BIC As String = "BIC"
 	
 	Dim texte_cell As String
 	Dim Cellule As Range
 	Dim TableauMorceaux() As String
 	Dim PremierePartie As String
 	Dim CleTrouvee As Range
+	' On mémorise la feuille pour que .Cells sache où écrire précisément
+	Dim wsTarget As Worksheet
+	Dim wsSearch As Worksheet
+	
+	Set wsTarget = Plage_libelle.Worksheet
+	Set wsSearch = PlageRecherche.Worksheet
 	
 	' Optimisation de la matrice
     Application.ScreenUpdating = False
@@ -254,13 +262,27 @@ Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range)
 			If InStr(texte_cell, char_to_split) > 0 Then
 				TableauMorceaux = Split(texte_cell, char_to_split)
                 PremierePartie = Trim(TableauMorceaux(0))
-                Cellule.Offset(0, col_to_inject_key_generate).Value = PremierePartie
+				' On récupère le numéro de la ligne actuelle
+				Dim r As Long
+				r = Cellule.Row
+				
+				wsTarget.Cells(r, Cellule_libelle_clean.Column).Value = PremierePartie
 				
 				' LE RAPPROCHEMENT
                 Set CleTrouvee = PlageRecherche.Find(What:=PremierePartie, LookIn:=xlValues, LookAt:=xlWhole)
 				
 				If Not CleTrouvee Is Nothing Then
+					wsTarget.Cells(r, Cellule_key_table.Column).Value = wsSearch.Cells(CleTrouvee.Row, letter_colonne(intitule, wsSearch).Column).Value
+					wsTarget.Cells(r, Cellule_IBAN.Column).Value = wsSearch.Cells(CleTrouvee.Row, letter_colonne(IBAN, wsSearch).Column).Value
+                
+					With wsTarget.Cells(r, Cellule_RIB.Column)
+						.NumberFormat = "@"
+						.Value = wsSearch.Cells(CleTrouvee.Row, letter_colonne(RIB, wsSearch).Column).Value
+					End With
+                
+					wsTarget.Cells(r, Cellule_BIC.Column).Value = wsSearch.Cells(CleTrouvee.Row, letter_colonne(BIC, wsSearch).Column).Value
 				Else
+					wsTarget.Cells(r, Cellule_key_table.Column).Value = val_not_in_correspondance
                 End If
 			End If
 		End If
