@@ -19,7 +19,6 @@ Sub Bouton1_Cliquer()
     Dim new_columns As Variant
     Dim export_achat As Worksheet
     Dim export_achat_name As String
-    Dim plan_comptable As Worksheet
     Dim table_correspondance As Worksheet
     Dim table_correspondance_name As String
     Dim export_achat_libelle As String
@@ -32,11 +31,8 @@ Sub Bouton1_Cliquer()
     Dim col_to_inject_bic As Long
     Dim PlageRecherche As Range
     Dim Col_correspondance As String
-    Dim PlageGlobale As Range
-    Dim PlageVisibles As Range
     Dim Cellule_libelle As Range
     Dim Cellule_correspondance As Range
-    Dim CheminDossier As String
     Dim CheminDossierIn As String
     Dim CheminDossierPrincipal As String
     Dim ClasseurPrincipal As Workbook
@@ -53,11 +49,6 @@ Sub Bouton1_Cliquer()
     new_columns = Array(libelle_clean, key_table, IBAN, RIB, BIC)
     export_achat_libelle = "Libellé"
     row_to_start = 2
-    col_to_inject_key_generate = 3
-    col_to_inject_key_find = 4
-    col_to_inject_iban = 5
-    col_to_inject_rib = 6
-    col_to_inject_bic = 7
     Col_correspondance = "correspondance_coala"
     table_correspondance_name = "table_correspondance"
     export_achat_name = "export_achat"
@@ -602,7 +593,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             number_of_transactions = number_of_transactions + 1
             total_payments = total_payments + valeur_credit
 			
-			Id_transac = number_of_transactions & "_" & Fix(valeur_credit) & "_" & Format(Now, "yyyymmdd_hhmmss")
+			Id_transac = number_of_transactions & "_" & CStr(Fix(valeur_credit)) & "_" & Format(Now, "yyyymmdd_hhmmss")
 			InstrId.Text = Id_transac
 			Ustrd.Text = Id_transac
 			EndToEndId.Text = Id_transac 
