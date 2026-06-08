@@ -42,6 +42,7 @@ Sub Bouton1_Cliquer()
     Const BIC As String = "BIC"
     Const xml_name As String = "bank_file.xml"
     Const credit As String = "Crédit"
+	Const date_libelle As String = "Date"
     ' --- CONSTANTES ---
     
     Dim new_columns As Variant
@@ -121,7 +122,7 @@ Sub Bouton1_Cliquer()
     generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC
     
     ' SUB génération du Xml
-    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB, number_of_transactions, total_payments
+    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB, date_libelle, number_of_transactions, total_payments, DateDebutChoisie, DateFinChoisie
     
     ' SUB archivage du fichier traité
     archive_file CheminDossierArchive, CheminDossierIn, CheminDossierOut, xml_name
@@ -227,6 +228,7 @@ Sub inject_data_in_worbook(path_directory As String, sheet_to_create As String, 
     Dim ClasseurSource As Workbook
     Dim NomOnglet As String
     Dim FSO As Object
+	Dim NouvelOnglet As Worksheet
     
     Set FSO = CreateObject("Scripting.FileSystemObject")
     Set Dossier = FSO.GetFolder(path_directory)
@@ -324,7 +326,7 @@ End Sub
 
 Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_RIB As Range, start_row As Long, _
                 credit As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String, _
-                ByRef number_of_transactions As Long, ByRef total_payments As Double)
+                date_libelle As String, ByRef number_of_transactions As Long, ByRef total_payments As Double, DateDebutChoisie As Date, DateFinChoisie As Date)
                 
     Const NS_PAIN001 As String = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.02"
     Const MsgId_cartron As String = "SARL CARTRO"
@@ -339,6 +341,12 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     Const ChrgBr_cartron As String = "SLEV"
     Const CdRgltry As String = "NNN"
 
+	Dim ColBic As Long
+	Dim ColKeyTable As Long
+	Dim ColIBAN As Long
+	Dim ColRIB As Long
+	Dim ColCreditNum As Long
+	Dim ColDate As Long
     Dim Plage_rib As Range
     Dim plage_cellule_rib As Range
     Dim texte_cell As String
@@ -346,6 +354,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     Dim valeur_credit As Double
     Dim ColCreditNum As Long
     Dim Id_transac As String
+	Dim valeur_date As Date
     Dim CheminFichier As String
     CheminFichier = CheminDossierOut & xml_name
     
@@ -509,12 +518,13 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     ' boucle pour générer l'intégralité des virements à effectuer
     Set Plage_rib = Plage_to_check(Cellule_RIB, export_achat, export_achat.Name, start_row)
-    
+	
     ColBic = letter_colonne(BIC_fournisseur, export_achat).Column
     ColKeyTable = letter_colonne(key_table, export_achat).Column
     ColIBAN = letter_colonne(IBAN_fournisseur, export_achat).Column
     ColRIB = letter_colonne(RIB_fournisseur, export_achat).Column
     ColCreditNum = letter_colonne(credit, export_achat).Column
+	ColDate = letter_colonne(date_libelle, export_achat).Column
     
     For Each plage_cellule_rib In Plage_rib
         texte_cell = plage_cellule_rib.Value
@@ -522,8 +532,10 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
         
         ' je caste en double
         valeur_credit = CDbl(export_achat.Cells(r, ColCreditNum).Value)
+		' On récupère la date de la ligne actuelle
+        valeur_date = CDate(export_achat.Cells(r, ColDate).Value)
         
-        If texte_cell <> "" And valeur_credit <> 0 Then
+        If texte_cell <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie Then
         
             valeur_bic = export_achat.Cells(r, ColBic).Value
             valeur_KeyTable = export_achat.Cells(r, ColKeyTable).Value
