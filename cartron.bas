@@ -4,9 +4,9 @@
 Sub Bouton1_Cliquer()
     
 	' --- CONSTANTES ---
-    Const CdRgltry As String = "NNN"
 	Const directory_in_name As String = "fichier_a_traiter"
 	Const directory_out_name As String = "fichier_genere"
+	Const directory_out_archive As String = "fichier_traite"
 	Const libelle_clean As String = "libelle_clean"
 	Const key_table As String = "key_table"
 	Const IBAN As String = "IBAN"
@@ -46,6 +46,9 @@ Sub Bouton1_Cliquer()
 	Dim Cellule_RIB As Range
 	Dim Cellule_BIC As Range
 	Dim CheminDossierOut As String
+	Dim CheminDossierArchive As String
+	Dim number_of_transactions As Long
+	Dim total_payments As Double
 	
 	new_columns = Array(libelle_clean, key_table, IBAN, RIB, BIC)
     export_achat_libelle = "Libellé"
@@ -65,6 +68,7 @@ Sub Bouton1_Cliquer()
 	' récupération et vérification des chemins pour les fichiers de données
 	CheminDossierIn = get_path_directory(CheminDossierPrincipal, directory_in_name)
 	CheminDossierOut = get_path_directory(CheminDossierPrincipal, directory_out_name)
+	CheminDossierArchive = get_path_directory(CheminDossierPrincipal, directory_out_archive)
 	
 	inject_data_in_worbook CheminDossierIn, export_achat_name, ClasseurPrincipal
     
@@ -98,9 +102,17 @@ Sub Bouton1_Cliquer()
 	generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC
 	
 	' SUB génération du Xml
-	generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB
+	generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB, number_of_transactions, total_payments
+	
+	' SUB archivage du fichier traité
+	archive_file CheminDossierArchive, CheminDossierIn, CheminDossierOut, xml_name
     
-    MsgBox "Xml validé et généré.", vbInformation
+	Dim Message As String
+	Message = "Fichier XML validé et généré avec succès !" & vbCrLf & vbCrLf & _
+			  "Résumé du traitement :" & vbCrLf & _
+			  "• Nombre de transactions : " & number_of_transactions & vbCrLf & _
+              "• Montant total cumulé : " & Format(total_payments, "#,##0.00 €")
+    MsgBox Message, vbInformation, "Génération SEPA Terminée"
 End Sub
 
 
@@ -284,7 +296,10 @@ Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_li
 End Sub
 
 
-Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_RIB As Range, start_row As Long, credit As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String)
+Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_RIB As Range, start_row As Long, _ 
+				credit As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String, _
+				ByRef number_of_transactions As Long, ByRef total_payments As Double)
+				
 	Const NS_PAIN001 As String = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.02"
 	Const MsgId_cartron As String = "SARL CARTRO"
 	Const Grpg_cartron As String  = "MIXD"
@@ -296,6 +311,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
 	Const IBAN_cartron As String = "FR7615589569890336821614074"
 	Const BIC_cartron As String = "CMBRFR2BARK"
 	Const ChrgBr_cartron As String = "SLEV"
+	Const CdRgltry As String = "NNN"
 
 	Dim Plage_rib As Range
 	Dim plage_cellule_rib As Range
@@ -305,6 +321,9 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
 	Dim ColCreditNum As Long
 	Dim CheminFichier As String
 	CheminFichier = CheminDossierOut & xml_name
+	
+	number_of_transactions = 0
+	total_payments = 0
 	
 	Dim DocXml As Object
 	Set DocXml = CreateObject("MSXML2.DOMDocument")
@@ -559,8 +578,69 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
 			iban_payment.Text = valeur_IBAN & valeur_RIB
 			Id_fournisseur.appendChild iban_payment
 			
+			Dim RgltryRptg As Object
+			Set RgltryRptg = DocXml.createNode(1, "RgltryRptg", NS_PAIN001)
+			CdtTrfTxInf.appendChild RgltryRptg
+			
+			Dim RgltryDtls As Object
+			Set RgltryDtls = DocXml.createNode(1, "RgltryDtls", NS_PAIN001)
+			RgltryRptg.appendChild RgltryDtls
+			
+			Dim Cd_payment As Object
+			Set Cd_payment = DocXml.createNode(1, "Cd", NS_PAIN001)
+			iban_payment.Text = CdRgltry
+			RgltryDtls.appendChild Cd_payment
+			
+			Dim RmtInf As Object
+			Set RmtInf = DocXml.createNode(1, "RmtInf", NS_PAIN001)
+			CdtTrfTxInf.appendChild RmtInf
+			
+			Dim Ustrd As Object
+			Set Ustrd = DocXml.createNode(1, "Ustrd", NS_PAIN001)
+			Ustrd.Text = "" 'Voir quelle valeur et quelle condition pour affichage
+			RmtInf.appendChild Ustrd
+			
+			number_of_transactions = number_of_transactions + 1
+			total_payments = total_payments + valeur_credit
+			
+			NbOfTxs.Text = CStr(number_of_transactions)
+			CtrlSum.Text = Replace(Format(total_payments, "0.00"), ",", ".")
+			
 		End If
 	Next plage_cellule_rib
 	
 	DocXml.Save CheminFichier
+End Sub
+
+
+Sub archive_file(directory_out_archive As String, CheminDossierIn As String, CheminDossierOut As String, xml_name As String)
+	Const NomNouveauDossier as String = "xml_from"
+
+	Dim CheminFichierXml As String
+	Dim Dossier As Object
+	Dim FSO As Object
+	Dim Fichier As Object
+	Dim CheminSource As String
+	Dim CheminDestination As String
+	Dim HorodatageDossier As String
+	Dim NomNouveauDossierHorodate As String
+	
+	CheminFichierXml = CheminDossierOut & xml_name
+	Set FSO = CreateObject("Scripting.FileSystemObject")
+	Set Dossier = FSO.GetFolder(CheminDossierIn)
+	
+	HorodatageDossier = Format(Now, "yyyymmdd_hhmmss")
+	NomNouveauDossierHorodate = NomNouveauDossier & "-" & HorodatageDossier
+	
+	CheminDestination = directory_out_archive & NomNouveauDossierHorodate
+	
+	MkDir CheminDestination
+	
+	For Each Fichier In Dossier.Files
+		CheminSource = Fichier.Path
+		FSO.MoveFile Source:=CheminSource, Destination:=CheminDestination & "\" & Fichier.Name
+	Next Fichier
+	
+	FSO.CopyFile Source:=CheminFichierXml, Destination:=CheminDestination & "\" & xml_name
+	
 End Sub
