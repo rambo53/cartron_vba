@@ -2,6 +2,34 @@
 ' 1. PROCÉDURE PRINCIPALE (LIÉE AU BOUTON)
 ' =========================================================================
 Sub Bouton1_Cliquer()
+    ' ---------------------
+    ' FORMULAIRE UserForm1
+    ' ---------------------
+    Dim FrmDates As New UserForm1
+    FrmDates.Show ' Le code s'arrête ici tant que l'utilisateur n'a pas cliqué sur Valider
+    
+    ' Si l'utilisateur a cliqué sur la croix pour fermer
+    If FrmDates.Annule Then
+        Unload FrmDates
+        Exit Sub ' On arrête proprement la macro
+    End If
+    
+    ' On récupère les dates saisies dans des variables si tu en as besoin plus tard
+    Dim DateDebutChoisie As Date
+    Dim DateFinChoisie As Date
+    DateDebutChoisie = FrmDates.DateDebut
+    DateFinChoisie = FrmDates.DateFin
+    
+    ' On décharge définitivement le formulaire de la mémoire
+    Unload FrmDates
+    ' ---------------------
+    ' FORMULAIRE UserForm1
+    ' ---------------------
+    
+    
+    ' ---------------------
+    '   TRAITEMENT
+    ' ---------------------
     
     ' --- CONSTANTES ---
     Const directory_in_name As String = "fichier_a_traiter"
@@ -104,6 +132,11 @@ Sub Bouton1_Cliquer()
               "• Nombre de transactions : " & number_of_transactions & vbCrLf & _
               "• Montant total cumulé : " & Format(total_payments, "#,##0.00 €")
     MsgBox Message, vbInformation, "Génération SEPA Terminée"
+    
+    ' ---------------------
+    '   TRAITEMENT
+    ' ---------------------
+    
 End Sub
 
 
@@ -175,8 +208,8 @@ End Function
 Sub create_columns(lst_cols As Variant, sheet_new_cols As Worksheet)
     Dim derniereColonne As Long
     Dim colonneAInjecter As Long
-	Dim NomColonne As Variant
-	
+    Dim NomColonne As Variant
+    
     For Each NomColonne In lst_cols
         ' 1. On cherche le numéro de la dernière colonne utilisée sur la ligne 1
         derniereColonne = sheet_new_cols.Cells(1, sheet_new_cols.Columns.Count).End(xlToLeft).Column
@@ -312,7 +345,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     Dim r As Long
     Dim valeur_credit As Double
     Dim ColCreditNum As Long
-	Dim Id_transac As String
+    Dim Id_transac As String
     Dim CheminFichier As String
     CheminFichier = CheminDossierOut & xml_name
     
@@ -496,10 +529,10 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             valeur_KeyTable = export_achat.Cells(r, ColKeyTable).Value
             valeur_IBAN = export_achat.Cells(r, ColIBAN).Value
             valeur_RIB = export_achat.Cells(r, ColRIB).Value
-			
-			Dim CdtTrfTxInf As Object
-			Set CdtTrfTxInf = DocXml.createNode(1, "CdtTrfTxInf", NS_PAIN001)
-			PmtInf.appendChild CdtTrfTxInf
+            
+            Dim CdtTrfTxInf As Object
+            Set CdtTrfTxInf = DocXml.createNode(1, "CdtTrfTxInf", NS_PAIN001)
+            PmtInf.appendChild CdtTrfTxInf
         
             Dim PmtId As Object
             Set PmtId = DocXml.createNode(1, "PmtId", NS_PAIN001)
@@ -594,11 +627,11 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             
             number_of_transactions = number_of_transactions + 1
             total_payments = total_payments + valeur_credit
-			
-			Id_transac = number_of_transactions & "_" & CStr(Fix(valeur_credit)) & "_" & Format(Now, "yyyymmdd_hhmmss")
-			InstrId.Text = Id_transac
-			Ustrd.Text = Id_transac
-			EndToEndId.Text = Id_transac 
+            
+            Id_transac = number_of_transactions & "_" & CStr(Fix(valeur_credit)) & "_" & Format(Now, "yyyymmdd_hhmmss")
+            InstrId.Text = Id_transac
+            Ustrd.Text = Id_transac
+            EndToEndId.Text = Id_transac
             
         End If
     Next plage_cellule_rib
@@ -641,4 +674,6 @@ Sub archive_file(directory_out_archive As String, CheminDossierIn As String, Che
     FSO.CopyFile Source:=CheminFichierXml, Destination:=CheminDestination & "\" & xml_name
     
 End Sub
+
+
 
