@@ -480,10 +480,6 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     ChrgBr.Text = ChrgBr_cartron
     PmtInf.appendChild ChrgBr
     
-    Dim CdtTrfTxInf As Object
-    Set CdtTrfTxInf = DocXml.createNode(1, "CdtTrfTxInf", NS_PAIN001)
-    PmtInf.appendChild CdtTrfTxInf
-    
     ' boucle pour générer l'intégralité des virements à effectuer
     Set Plage_rib = Plage_to_check(Cellule_RIB, export_achat, export_achat.Name, start_row)
     
@@ -506,6 +502,10 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             valeur_KeyTable = export_achat.Cells(r, ColKeyTable).Value
             valeur_IBAN = export_achat.Cells(r, ColIBAN).Value
             valeur_RIB = export_achat.Cells(r, ColRIB).Value
+			
+			Dim CdtTrfTxInf As Object
+			Set CdtTrfTxInf = DocXml.createNode(1, "CdtTrfTxInf", NS_PAIN001)
+			PmtInf.appendChild CdtTrfTxInf
         
             Dim PmtId As Object
             Set PmtId = DocXml.createNode(1, "PmtId", NS_PAIN001)
