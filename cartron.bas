@@ -175,6 +175,8 @@ End Function
 Sub create_columns(lst_cols As Variant, sheet_new_cols As Worksheet)
     Dim derniereColonne As Long
     Dim colonneAInjecter As Long
+	Dim NomColonne As Variant
+	
     For Each NomColonne In lst_cols
         ' 1. On cherche le numéro de la dernière colonne utilisée sur la ligne 1
         derniereColonne = sheet_new_cols.Cells(1, sheet_new_cols.Columns.Count).End(xlToLeft).Column
