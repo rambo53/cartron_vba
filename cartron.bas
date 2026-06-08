@@ -319,6 +319,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     Dim r As Long
     Dim valeur_credit As Double
     Dim ColCreditNum As Long
+	Dim Id_transac As String
     Dim CheminFichier As String
     CheminFichier = CheminDossierOut & xml_name
     
@@ -513,12 +514,12 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             
             Dim InstrId As Object
             Set InstrId = DocXml.createNode(1, "InstrId", NS_PAIN001)
-            InstrId.Text = "" 'Voir quelle valeur et quelle condition pour affichage
+            'InstrId.Text = "" 'Voir quelle valeur et quelle condition pour affichage
             PmtId.appendChild InstrId
             
             Dim EndToEndId As Object
             Set EndToEndId = DocXml.createNode(1, "EndToEndId", NS_PAIN001)
-            EndToEndId.Text = "" 'Voir quelle valeur et quelle condition pour affichage
+            'EndToEndId.Text = "" 'Voir quelle valeur et quelle condition pour affichage
             PmtId.appendChild EndToEndId
             
             Dim Amt As Object
@@ -595,11 +596,16 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             
             Dim Ustrd As Object
             Set Ustrd = DocXml.createNode(1, "Ustrd", NS_PAIN001)
-            Ustrd.Text = "" 'Voir quelle valeur et quelle condition pour affichage
+            'Ustrd.Text = "" 'Voir quelle valeur et quelle condition pour affichage
             RmtInf.appendChild Ustrd
             
             number_of_transactions = number_of_transactions + 1
             total_payments = total_payments + valeur_credit
+			
+			Id_transac = number_of_transactions & "_" & Fix(valeur_credit) & "_" & Format(Now, "yyyymmdd_hhmmss")
+			InstrId.Text = Id_transac
+			Ustrd.Text = Id_transac
+			EndToEndId.Text = Id_transac 
             
         End If
     Next plage_cellule_rib
