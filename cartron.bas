@@ -80,6 +80,7 @@ Sub Bouton1_Cliquer()
     Dim CheminDossierArchive As String
     Dim number_of_transactions As Long
     Dim total_payments As Double
+	Dim data_dict As Object
     
     new_columns = Array(date_libelle, Journal_export_achat, Compte_export_achat, Piece_export_achat, export_achat_libelle, _
 						Debit_export_achat, Credit_export_achat, Col_defaut_coala, libelle_clean, key_table, IBAN, RIB, BIC)
@@ -129,9 +130,12 @@ Sub Bouton1_Cliquer()
     
     'SUB génération de la matrice complétée
     generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC
+	
+	'je récupère mon dictionnaire issue de l'onglet "DATA"
+	Set data_dict = get_data_dict()
     
     ' SUB génération du Xml
-    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB, date_libelle, number_of_transactions, total_payments, DateDebutChoisie, DateFinChoisie, Compte_export_achat
+    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB, date_libelle, number_of_transactions, total_payments, DateDebutChoisie, DateFinChoisie, Compte_export_achat, data_dict
     
     ' SUB archivage du fichier traité
     archive_file CheminDossierArchive, CheminDossierIn, CheminDossierOut, xml_name
@@ -210,6 +214,27 @@ Function get_path_directory(path_directory As String, path_directory_concat As S
     End If
     get_path_directory = path_to_return
 End Function
+
+
+Function get_data_dict() As Object
+	Dim MonDico As Object
+	Dim data_sheet As Worksheet
+	Dim derniereColonne As Long
+	
+	Set data_sheet = Worksheets("DATA")
+	Set MonDico = CreateObject("Scripting.Dictionary")
+	derniereColonne = data_sheet.Cells(1, data_sheet.Columns.Count).End(xlToLeft).Column
+	
+	For c = 1 To derniereColonne
+		Cle = data_sheet.Cells(1, c).Value
+		Valeur = data_sheet.Cells(2, c).Value
+		If Cle <> "" Then
+			MonDico(Cle) = Valeur
+		End If
+	Next c
+	Set get_data_dict = MonDico
+End Function
+
 
 ' =========================================================================
 ' 3. SUBPROCESS
@@ -335,20 +360,10 @@ End Sub
 
 Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_RIB As Range, start_row As Long, _
                 credit As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String, _
-                date_libelle As String, ByRef number_of_transactions As Long, ByRef total_payments As Double, DateDebutChoisie As Date, DateFinChoisie As Date, Compte_export_achat As String)
-                
+                date_libelle As String, ByRef number_of_transactions As Long, ByRef total_payments As Double, DateDebutChoisie As Date, DateFinChoisie As Date, _
+				Compte_export_achat As String, data_dict As Object)
+    
     Const NS_PAIN001 As String = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.02"
-    Const MsgId_cartron As String = "SARL CARTRO"
-    Const Grpg_cartron As String = "MIXD"
-    Const Nm_cartron As String = "SARL CARTRON"
-    Const Siret_cartron As String = "33517450400019"
-    Const PmtMtd_cartron As String = "TRF"
-    Const CdPmt As String = "SEPA"
-    Const AdrLine_cartron As String = "1 RUE DU GENERAL BARON FABRE 56000 VANNES"
-    Const IBAN_cartron As String = "FR7615589569890336821614074"
-    Const BIC_cartron As String = "CMBRFR2BARK"
-    Const ChrgBr_cartron As String = "SLEV"
-    Const CdRgltry As String = "NNN"
 
 	Dim ColBic As Long
 	Dim ColKeyTable As Long
@@ -391,7 +406,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim MsgId As Object
     Set MsgId = DocXml.createNode(1, "MsgId", NS_PAIN001)
-    MsgId.Text = MsgId_cartron & Format(Now, "ddmmyyyy-hhmmss")
+    MsgId.Text = data_dict("MsgId_client") & Format(Now, "ddmmyyyy-hhmmss")
     GrpHdr.appendChild MsgId
     
     Dim CreDtTm As Object
@@ -409,7 +424,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim Grpg As Object
     Set Grpg = DocXml.createNode(1, "Grpg", NS_PAIN001)
-    Grpg.Text = Grpg_cartron
+    Grpg.Text = data_dict("Grpg_client")
     GrpHdr.appendChild Grpg
     
     Dim InitgPty As Object
@@ -418,7 +433,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
 
     Dim Nm As Object
     Set Nm = DocXml.createNode(1, "Nm", NS_PAIN001)
-    Nm.Text = Nm_cartron
+    Nm.Text = data_dict("Nm_client")
     InitgPty.appendChild Nm
     
     Dim Id As Object
@@ -434,8 +449,8 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     OrgId.appendChild PrtryId
     
     Dim IdSiret As Object
-    Set IdSiret = DocXml.createNode(1, "IdSiret", NS_PAIN001)
-    IdSiret.Text = Siret_cartron
+    Set IdSiret = DocXml.createNode(1, "Id", NS_PAIN001)
+    IdSiret.Text = data_dict("Siret_client")
     PrtryId.appendChild IdSiret
     
     Dim PmtInf As Object
@@ -444,12 +459,13 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim PmtInfId As Object
     Set PmtInfId = DocXml.createNode(1, "PmtInfId", NS_PAIN001)
-    PmtInfId.Text = Nm_cartron & Format(Now, "yymmddhhmmssfff")
+	Randomize
+    PmtInfId.Text = data_dict("Nm_client") & Format(Now, "yymmddhhmmss") & Int(900 * Rnd + 100)
     PmtInf.appendChild PmtInfId
     
     Dim PmtMtd As Object
     Set PmtMtd = DocXml.createNode(1, "PmtMtd", NS_PAIN001)
-    PmtMtd.Text = PmtMtd_cartron
+    PmtMtd.Text = data_dict("PmtMtd")
     PmtInf.appendChild PmtMtd
     
     Dim PmtTpInf As Object
@@ -462,7 +478,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim Cd As Object
     Set Cd = DocXml.createNode(1, "Cd", NS_PAIN001)
-    Cd.Text = CdPmt
+    Cd.Text = data_dict("CdPmt")
     SvcLvl.appendChild Cd
     
     Dim ReqdExctnDt As Object
@@ -476,7 +492,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim NmDbtr As Object
     Set NmDbtr = DocXml.createNode(1, "Nm", NS_PAIN001)
-    NmDbtr.Text = Nm_cartron
+    NmDbtr.Text = data_dict("Nm_client")
     Dbtr.appendChild NmDbtr
     
     Dim PstlAdr As Object
@@ -485,12 +501,12 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim AdrLine As Object
     Set AdrLine = DocXml.createNode(1, "AdrLine", NS_PAIN001)
-    AdrLine.Text = AdrLine_cartron
+    AdrLine.Text = data_dict("AdrLine_client")
     PstlAdr.appendChild AdrLine
     
     Dim Ctry As Object
     Set Ctry = DocXml.createNode(1, "Ctry", NS_PAIN001)
-    Ctry.Text = Left(IBAN_cartron, 2)
+    Ctry.Text = Left(data_dict("IBAN_client"), 2)
     PstlAdr.appendChild Ctry
     
     Dim DbtrAcct As Object
@@ -503,7 +519,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim IBAN As Object
     Set IBAN = DocXml.createNode(1, "IBAN", NS_PAIN001)
-    IBAN.Text = IBAN_cartron
+    IBAN.Text = data_dict("IBAN_client")
     IdDbtr.appendChild IBAN
     
     Dim DbtrAgt As Object
@@ -516,15 +532,14 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim BIC As Object
     Set BIC = DocXml.createNode(1, "BIC", NS_PAIN001)
-    BIC.Text = BIC_cartron
+    BIC.Text = data_dict("BIC_client")
     FinInstnId.appendChild BIC
     
     Dim ChrgBr As Object
     Set ChrgBr = DocXml.createNode(1, "ChrgBr", NS_PAIN001)
-    ChrgBr.Text = ChrgBr_cartron
+    ChrgBr.Text = data_dict("ChrgBr_client")
     PmtInf.appendChild ChrgBr
     
-    ' boucle pour générer l'intégralité des virements à effectuer
     Set Plage_rib = Plage_to_check(Cellule_RIB, export_achat, export_achat.Name, start_row)
 	
     ColBic = letter_colonne(BIC_fournisseur, export_achat).Column
@@ -534,7 +549,8 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     ColCreditNum = letter_colonne(credit, export_achat).Column
 	ColDate = letter_colonne(date_libelle, export_achat).Column
 	ColCompte = letter_colonne(Compte_export_achat, export_achat).Column
-    
+	
+    ' boucle pour générer l'intégralité des virements à effectuer
     For Each plage_cellule_rib In Plage_rib
         texte_cell = plage_cellule_rib.Value
         r = plage_cellule_rib.Row
@@ -562,12 +578,10 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             
             Dim InstrId As Object
             Set InstrId = DocXml.createNode(1, "InstrId", NS_PAIN001)
-            'InstrId.Text = "" 'Voir quelle valeur et quelle condition pour affichage
             PmtId.appendChild InstrId
             
             Dim EndToEndId As Object
             Set EndToEndId = DocXml.createNode(1, "EndToEndId", NS_PAIN001)
-            'EndToEndId.Text = "" 'Voir quelle valeur et quelle condition pour affichage
             PmtId.appendChild EndToEndId
             
             Dim Amt As Object
@@ -635,7 +649,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             
             Dim Cd_payment As Object
             Set Cd_payment = DocXml.createNode(1, "Cd", NS_PAIN001)
-            Cd_payment.Text = CdRgltry
+            Cd_payment.Text = data_dict("CdRgltry")
             RgltryDtls.appendChild Cd_payment
             
             Dim RmtInf As Object
@@ -644,7 +658,6 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             
             Dim Ustrd As Object
             Set Ustrd = DocXml.createNode(1, "Ustrd", NS_PAIN001)
-            'Ustrd.Text = "" 'Voir quelle valeur et quelle condition pour affichage
             RmtInf.appendChild Ustrd
             
             number_of_transactions = number_of_transactions + 1
