@@ -35,6 +35,13 @@ Sub Bouton1_Cliquer()
     Const directory_in_name As String = "fichier_a_traiter"
     Const directory_out_name As String = "fichier_genere"
     Const directory_out_archive As String = "fichier_traite"
+	Const Journal_export_achat As String = "Journal"
+	Const Compte_export_achat As String = "Compte"
+	Const Piece_export_achat As String = "Pièce"
+	Const export_achat_libelle As String = "Libellé"
+	Const Debit_export_achat As String = "Débit"
+	Const Credit_export_achat As String = "Crédit"
+	Const Col_defaut_coala As String = "Defaut"
     Const libelle_clean As String = "libelle_clean"
     Const key_table As String = "key_table"
     Const IBAN As String = "IBAN"
@@ -50,7 +57,6 @@ Sub Bouton1_Cliquer()
     Dim export_achat_name As String
     Dim table_correspondance As Worksheet
     Dim table_correspondance_name As String
-    Dim export_achat_libelle As String
     Dim Plage_libelle As Range
     Dim row_to_start As Long
     Dim col_to_inject_key_generate As Long
@@ -75,8 +81,8 @@ Sub Bouton1_Cliquer()
     Dim number_of_transactions As Long
     Dim total_payments As Double
     
-    new_columns = Array(libelle_clean, key_table, IBAN, RIB, BIC)
-    export_achat_libelle = "Libellé"
+    new_columns = Array(date_libelle, Journal_export_achat, Compte_export_achat, Piece_export_achat, export_achat_libelle, _
+						Debit_export_achat, Credit_export_achat, Col_defaut_coala, libelle_clean, key_table, IBAN, RIB, BIC)
     row_to_start = 2
     Col_correspondance = "correspondance_coala"
     table_correspondance_name = "table_correspondance"
@@ -94,6 +100,9 @@ Sub Bouton1_Cliquer()
     
     ' --- APPEL DES FONCTIONS POUR DÉFINIR LA PLAGE ---
     Set export_achat = ActiveSheet
+	
+	' SUB création des nouvelles colonnes dans l'export_achat
+    create_columns new_columns, export_achat
     
     ' 1. Appel de la fonction letter_colonne pour obtenir la lettre de la cellule d'un nom de colonne
     Set Cellule_libelle = letter_colonne(export_achat_libelle, export_achat)
@@ -110,7 +119,7 @@ Sub Bouton1_Cliquer()
     Set PlageRecherche = Plage_to_check(Cellule_correspondance, table_correspondance, table_correspondance_name, row_to_start)
     
     ' SUB création des nouvelles colonnes dans l'export_achat
-    create_columns new_columns, export_achat
+    'create_columns new_columns, export_achat
     
     Set Cellule_libelle_clean = letter_colonne(libelle_clean, export_achat)
     Set Cellule_key_table = letter_colonne(key_table, export_achat)
@@ -122,7 +131,7 @@ Sub Bouton1_Cliquer()
     generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC
     
     ' SUB génération du Xml
-    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB, date_libelle, number_of_transactions, total_payments, DateDebutChoisie, DateFinChoisie
+    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB, date_libelle, number_of_transactions, total_payments, DateDebutChoisie, DateFinChoisie, Compte_export_achat
     
     ' SUB archivage du fichier traité
     archive_file CheminDossierArchive, CheminDossierIn, CheminDossierOut, xml_name
@@ -210,14 +219,14 @@ Sub create_columns(lst_cols As Variant, sheet_new_cols As Worksheet)
     Dim derniereColonne As Long
     Dim colonneAInjecter As Long
     Dim NomColonne As Variant
+	' ajout nouvelle ligne pour noms colonnes
+	sheet_new_cols.Rows(1).Insert Shift:=xlDown
+	
+	colonneAInjecter = 1
     
     For Each NomColonne In lst_cols
-        ' 1. On cherche le numéro de la dernière colonne utilisée sur la ligne 1
-        derniereColonne = sheet_new_cols.Cells(1, sheet_new_cols.Columns.Count).End(xlToLeft).Column
-        ' 2. La colonne où injecter notre titre sera la suivante
-        colonneAInjecter = derniereColonne + 1
-        ' 3. On inscrit le nom de l'en-tête
         sheet_new_cols.Cells(1, colonneAInjecter).Value = NomColonne
+		colonneAInjecter = colonneAInjecter + 1
     Next NomColonne
 End Sub
 
@@ -326,7 +335,7 @@ End Sub
 
 Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_RIB As Range, start_row As Long, _
                 credit As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String, _
-                date_libelle As String, ByRef number_of_transactions As Long, ByRef total_payments As Double, DateDebutChoisie As Date, DateFinChoisie As Date)
+                date_libelle As String, ByRef number_of_transactions As Long, ByRef total_payments As Double, DateDebutChoisie As Date, DateFinChoisie As Date, Compte_export_achat As String)
                 
     Const NS_PAIN001 As String = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.02"
     Const MsgId_cartron As String = "SARL CARTRO"
@@ -345,7 +354,6 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
 	Dim ColKeyTable As Long
 	Dim ColIBAN As Long
 	Dim ColRIB As Long
-	Dim ColCreditNum As Long
 	Dim ColDate As Long
     Dim Plage_rib As Range
     Dim plage_cellule_rib As Range
@@ -525,6 +533,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     ColRIB = letter_colonne(RIB_fournisseur, export_achat).Column
     ColCreditNum = letter_colonne(credit, export_achat).Column
 	ColDate = letter_colonne(date_libelle, export_achat).Column
+	ColCompte = letter_colonne(Compte_export_achat, export_achat).Column
     
     For Each plage_cellule_rib In Plage_rib
         texte_cell = plage_cellule_rib.Value
@@ -534,8 +543,9 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
         valeur_credit = CDbl(export_achat.Cells(r, ColCreditNum).Value)
 		' On récupère la date de la ligne actuelle
         valeur_date = CDate(export_achat.Cells(r, ColDate).Value)
+		valeur_compte = export_achat.Cells(r, ColCompte).Value
         
-        If texte_cell <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie Then
+        If texte_cell <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie And valeur_compte Like "F*" Then
         
             valeur_bic = export_achat.Cells(r, ColBic).Value
             valeur_KeyTable = export_achat.Cells(r, ColKeyTable).Value
