@@ -48,7 +48,6 @@ Sub Bouton1_Cliquer()
     Const RIB As String = "RIB"
     Const BIC As String = "BIC"
     Const xml_name As String = "bank_file.xml"
-    Const credit As String = "Crédit"
 	Const date_libelle As String = "Date"
     ' --- CONSTANTES ---
     
@@ -76,6 +75,7 @@ Sub Bouton1_Cliquer()
     Dim Cellule_IBAN As Range
     Dim Cellule_RIB As Range
     Dim Cellule_BIC As Range
+	Dim Cellule_date As Range
     Dim CheminDossierOut As String
     Dim CheminDossierArchive As String
     Dim number_of_transactions As Long
@@ -84,6 +84,7 @@ Sub Bouton1_Cliquer()
     
     new_columns = Array(date_libelle, Journal_export_achat, Compte_export_achat, Piece_export_achat, export_achat_libelle, _
 						Debit_export_achat, Credit_export_achat, Col_defaut_coala, libelle_clean, key_table, IBAN, RIB, BIC)
+	
     row_to_start = 2
     Col_correspondance = "correspondance_coala"
     table_correspondance_name = "table_correspondance"
@@ -100,7 +101,7 @@ Sub Bouton1_Cliquer()
     inject_data_in_worbook CheminDossierIn, export_achat_name, ClasseurPrincipal
     
     ' --- APPEL DES FONCTIONS POUR DÉFINIR LA PLAGE ---
-    Set export_achat = ActiveSheet
+    Set export_achat = Get_sheet(export_achat_name)
 	
 	' SUB création des nouvelles colonnes dans l'export_achat
     create_columns new_columns, export_achat
@@ -119,14 +120,12 @@ Sub Bouton1_Cliquer()
     ' Définir la zone de recherche dans la table de correspondance
     Set PlageRecherche = Plage_to_check(Cellule_correspondance, table_correspondance, table_correspondance_name, row_to_start)
     
-    ' SUB création des nouvelles colonnes dans l'export_achat
-    'create_columns new_columns, export_achat
-    
     Set Cellule_libelle_clean = letter_colonne(libelle_clean, export_achat)
     Set Cellule_key_table = letter_colonne(key_table, export_achat)
     Set Cellule_IBAN = letter_colonne(IBAN, export_achat)
     Set Cellule_RIB = letter_colonne(RIB, export_achat)
     Set Cellule_BIC = letter_colonne(BIC, export_achat)
+	Set Cellule_date = letter_colonne(date_libelle, export_achat)
     
     'SUB génération de la matrice complétée
     generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC
@@ -135,7 +134,7 @@ Sub Bouton1_Cliquer()
 	Set data_dict = get_data_dict()
     
     ' SUB génération du Xml
-    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_RIB, row_to_start, credit, BIC, key_table, IBAN, RIB, date_libelle, number_of_transactions, total_payments, DateDebutChoisie, DateFinChoisie, Compte_export_achat, data_dict
+    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_date, row_to_start, Credit_export_achat, BIC, key_table, IBAN, RIB, date_libelle, number_of_transactions, total_payments, DateDebutChoisie, DateFinChoisie, Compte_export_achat, data_dict
     
     ' SUB archivage du fichier traité
     archive_file CheminDossierArchive, CheminDossierIn, CheminDossierOut, xml_name
@@ -263,9 +262,24 @@ Sub inject_data_in_worbook(path_directory As String, sheet_to_create As String, 
     Dim NomOnglet As String
     Dim FSO As Object
 	Dim NouvelOnglet As Worksheet
+	Dim FichierValideExiste As Boolean
     
     Set FSO = CreateObject("Scripting.FileSystemObject")
     Set Dossier = FSO.GetFolder(path_directory)
+	
+	FichierValideExiste = False
+	
+	For Each Fichier In Dossier.Files
+		If (InStr(Fichier.Name, ".xls") > 0) And (Left(Fichier.Name, 2) <> "~$") Then
+			FichierValideExiste = True
+			Exit For
+		End If
+	Next Fichier
+	
+	If Not FichierValideExiste Then
+		MsgBox "Aucun fichier valide n'a été trouvé pour le traitement.", vbExclamation, "Dossier vide ou invalide"
+		End
+	End If
     
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
@@ -358,7 +372,7 @@ Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_li
 End Sub
 
 
-Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_RIB As Range, start_row As Long, _
+Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_date As Range, start_row As Long, _
                 credit As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String, _
                 date_libelle As String, ByRef number_of_transactions As Long, ByRef total_payments As Double, DateDebutChoisie As Date, DateFinChoisie As Date, _
 				Compte_export_achat As String, data_dict As Object)
@@ -370,7 +384,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
 	Dim ColIBAN As Long
 	Dim ColRIB As Long
 	Dim ColDate As Long
-    Dim Plage_rib As Range
+    Dim Plage_date As Range
     Dim plage_cellule_rib As Range
     Dim texte_cell As String
     Dim r As Long
@@ -540,33 +554,37 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     ChrgBr.Text = data_dict("ChrgBr_client")
     PmtInf.appendChild ChrgBr
     
-    Set Plage_rib = Plage_to_check(Cellule_RIB, export_achat, export_achat.Name, start_row)
+    Set Plage_date = Plage_to_check(Cellule_date, export_achat, export_achat.Name, start_row)
 	
     ColBic = letter_colonne(BIC_fournisseur, export_achat).Column
     ColKeyTable = letter_colonne(key_table, export_achat).Column
     ColIBAN = letter_colonne(IBAN_fournisseur, export_achat).Column
     ColRIB = letter_colonne(RIB_fournisseur, export_achat).Column
     ColCreditNum = letter_colonne(credit, export_achat).Column
+	
 	ColDate = letter_colonne(date_libelle, export_achat).Column
 	ColCompte = letter_colonne(Compte_export_achat, export_achat).Column
 	
     ' boucle pour générer l'intégralité des virements à effectuer
-    For Each plage_cellule_rib In Plage_rib
-        texte_cell = plage_cellule_rib.Value
-        r = plage_cellule_rib.Row
+    For Each plage_cellule_date In Plage_date
+        'texte_cell = plage_cellule_rib.Value
+        r = plage_cellule_date.Row
         
         ' je caste en double
         valeur_credit = CDbl(export_achat.Cells(r, ColCreditNum).Value)
+
 		' On récupère la date de la ligne actuelle
         valeur_date = CDate(export_achat.Cells(r, ColDate).Value)
 		valeur_compte = export_achat.Cells(r, ColCompte).Value
+		valeur_RIB = export_achat.Cells(r, ColRIB).Value
         
-        If texte_cell <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie And valeur_compte Like "F*" Then
+        'If texte_cell <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie And valeur_compte Like "F*" Then
+		If valeur_RIB <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie And valeur_compte Like "F*" Then
         
             valeur_bic = export_achat.Cells(r, ColBic).Value
             valeur_KeyTable = export_achat.Cells(r, ColKeyTable).Value
             valeur_IBAN = export_achat.Cells(r, ColIBAN).Value
-            valeur_RIB = export_achat.Cells(r, ColRIB).Value
+            'valeur_RIB = export_achat.Cells(r, ColRIB).Value
             
             Dim CdtTrfTxInf As Object
             Set CdtTrfTxInf = DocXml.createNode(1, "CdtTrfTxInf", NS_PAIN001)
@@ -669,7 +687,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             EndToEndId.Text = Id_transac
             
         End If
-    Next plage_cellule_rib
+    Next plage_cellule_date
     
     NbOfTxs.Text = CStr(number_of_transactions)
     CtrlSum.Text = Replace(Format(total_payments, "0.00"), ",", ".")
