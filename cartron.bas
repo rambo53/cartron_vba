@@ -35,20 +35,21 @@ Sub Bouton1_Cliquer()
     Const directory_in_name As String = "fichier_a_traiter"
     Const directory_out_name As String = "fichier_genere"
     Const directory_out_archive As String = "fichier_traite"
-	Const Journal_export_achat As String = "Journal"
-	Const Compte_export_achat As String = "Compte"
-	Const Piece_export_achat As String = "Pièce"
-	Const export_achat_libelle As String = "Libellé"
-	Const Debit_export_achat As String = "Débit"
-	Const Credit_export_achat As String = "Crédit"
-	Const Col_defaut_coala As String = "Defaut"
+    Const Journal_export_achat As String = "Journal"
+    Const Compte_export_achat As String = "Compte"
+    Const Piece_export_achat As String = "Pièce"
+    Const export_achat_libelle As String = "Libellé"
+    Const Debit_export_achat As String = "Débit"
+    Const Credit_export_achat As String = "Crédit"
+    Const Col_defaut_coala As String = "Defaut"
     Const libelle_clean As String = "libelle_clean"
     Const key_table As String = "key_table"
+    Const date_ech As String = "date_ech"
     Const IBAN As String = "IBAN"
     Const RIB As String = "RIB"
     Const BIC As String = "BIC"
     Const xml_name As String = "bank_file.xml"
-	Const date_libelle As String = "Date"
+    Const date_libelle As String = "Date"
     ' --- CONSTANTES ---
     
     Dim new_columns As Variant
@@ -57,6 +58,7 @@ Sub Bouton1_Cliquer()
     Dim table_correspondance As Worksheet
     Dim table_correspondance_name As String
     Dim Plage_libelle As Range
+    Dim Plage_debit As Range
     Dim row_to_start As Long
     Dim col_to_inject_key_generate As Long
     Dim col_to_inject_key_find As Long
@@ -75,16 +77,18 @@ Sub Bouton1_Cliquer()
     Dim Cellule_IBAN As Range
     Dim Cellule_RIB As Range
     Dim Cellule_BIC As Range
-	Dim Cellule_date As Range
+    Dim Cellule_date_ech As Range
+    Dim Cellule_debit As Range
     Dim CheminDossierOut As String
     Dim CheminDossierArchive As String
     Dim number_of_transactions As Long
     Dim total_payments As Double
-	Dim data_dict As Object
+    Dim data_dict As Object
+    Dim paiement_dict As Object
     
     new_columns = Array(date_libelle, Journal_export_achat, Compte_export_achat, Piece_export_achat, export_achat_libelle, _
-						Debit_export_achat, Credit_export_achat, Col_defaut_coala, libelle_clean, key_table, IBAN, RIB, BIC)
-	
+                        Debit_export_achat, Credit_export_achat, Col_defaut_coala, libelle_clean, key_table, date_ech, IBAN, RIB, BIC)
+    
     row_to_start = 2
     Col_correspondance = "correspondance_coala"
     table_correspondance_name = "table_correspondance"
@@ -102,8 +106,8 @@ Sub Bouton1_Cliquer()
     
     ' --- APPEL DES FONCTIONS POUR DÉFINIR LA PLAGE ---
     Set export_achat = Get_sheet(export_achat_name)
-	
-	' SUB création des nouvelles colonnes dans l'export_achat
+    
+    ' SUB création des nouvelles colonnes dans l'export_achat
     create_columns new_columns, export_achat
     
     ' 1. Appel de la fonction letter_colonne pour obtenir la lettre de la cellule d'un nom de colonne
@@ -125,25 +129,41 @@ Sub Bouton1_Cliquer()
     Set Cellule_IBAN = letter_colonne(IBAN, export_achat)
     Set Cellule_RIB = letter_colonne(RIB, export_achat)
     Set Cellule_BIC = letter_colonne(BIC, export_achat)
-	Set Cellule_date = letter_colonne(date_libelle, export_achat)
+    Set Cellule_date_ech = letter_colonne(date_ech, export_achat)
     
     'SUB génération de la matrice complétée
-    generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC
-	
-	'je récupère mon dictionnaire issue de l'onglet "DATA"
-	Set data_dict = get_data_dict()
+    generate_matrice Plage_libelle, PlageRecherche, Cellule_libelle_clean, Cellule_key_table, Cellule_IBAN, Cellule_RIB, Cellule_BIC, Cellule_date_ech, IBAN, RIB, BIC
+    
+    ' on récupère les informations de position de la colonne "Débit"
+    Set Cellule_debit = letter_colonne(Debit_export_achat, export_achat)
+    Set Plage_debit = Plage_to_check(Cellule_debit, export_achat, export_achat_name, row_to_start)
+    
+    'SUB traitement des débits
+    get_debit Plage_debit, PlageRecherche, Cellule_libelle, Cellule_IBAN, Cellule_RIB, Cellule_BIC, Cellule_date_ech, Cellule_key_table, IBAN, RIB, BIC
+
+    
+    'je récupère mon dictionnaire issue de l'onglet "DATA"
+    Set data_dict = get_data_dict()
     
     ' SUB génération du Xml
-    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_date, row_to_start, Credit_export_achat, BIC, key_table, IBAN, RIB, date_libelle, number_of_transactions, total_payments, DateDebutChoisie, DateFinChoisie, Compte_export_achat, data_dict
+    generate_xml CheminDossierOut, xml_name, export_achat, Cellule_date_ech, Cellule_libelle_clean, row_to_start, Credit_export_achat, Debit_export_achat, BIC, key_table, IBAN, RIB, date_ech, number_of_transactions, total_payments, paiement_dict, DateDebutChoisie, DateFinChoisie, Compte_export_achat, data_dict
     
     ' SUB archivage du fichier traité
     archive_file CheminDossierArchive, CheminDossierIn, CheminDossierOut, xml_name
     
     Dim Message As String
+    Dim Message_dict As String
+    
+    For Each debit In paiement_dict.Keys
+        Message_dict = Message_dict & paiement_dict(debit) & vbCrLf
+    Next debit
+    
     Message = "Fichier XML validé et généré avec succès !" & vbCrLf & vbCrLf & _
               "Résumé du traitement :" & vbCrLf & _
               "• Nombre de transactions : " & number_of_transactions & vbCrLf & _
-              "• Montant total cumulé : " & Format(total_payments, "#,##0.00 €")
+              "• Montant total cumulé : " & Format(total_payments, "#,##0.00 €") & vbCrLf & _
+              "Détails :" & vbCrLf & _
+              Message_dict
     MsgBox Message, vbInformation, "Génération SEPA Terminée"
     
     ' ---------------------
@@ -157,7 +177,7 @@ End Sub
 ' 2. LES FONCTIONS EXTÉRIEURES (INDÉPENDANTES)
 ' =========================================================================
 
-Function letter_colonne(label_to_find As String, sheet_to_use As Worksheet) As Range
+Function letter_colonne(ByVal label_to_find As String, ByVal sheet_to_use As Worksheet) As Range
     Dim CelluleTrouvee As Range
     ' On renvoie un Objet Range (la cellule du titre), donc on utilise "As Range" et le mot "Set"
     Set CelluleTrouvee = sheet_to_use.Rows(1).Find(What:=label_to_find, LookIn:=xlValues, LookAt:=xlWhole)
@@ -216,24 +236,23 @@ End Function
 
 
 Function get_data_dict() As Object
-	Dim MonDico As Object
-	Dim data_sheet As Worksheet
-	Dim derniereColonne As Long
-	
-	Set data_sheet = Worksheets("DATA")
-	Set MonDico = CreateObject("Scripting.Dictionary")
-	derniereColonne = data_sheet.Cells(1, data_sheet.Columns.Count).End(xlToLeft).Column
-	
-	For c = 1 To derniereColonne
-		Cle = data_sheet.Cells(1, c).Value
-		Valeur = data_sheet.Cells(2, c).Value
-		If Cle <> "" Then
-			MonDico(Cle) = Valeur
-		End If
-	Next c
-	Set get_data_dict = MonDico
+    Dim MonDico As Object
+    Dim data_sheet As Worksheet
+    Dim derniereColonne As Long
+    
+    Set data_sheet = Worksheets("DATA")
+    Set MonDico = CreateObject("Scripting.Dictionary")
+    derniereColonne = data_sheet.Cells(1, data_sheet.Columns.Count).End(xlToLeft).Column
+    
+    For c = 1 To derniereColonne
+        Cle = data_sheet.Cells(1, c).Value
+        Valeur = data_sheet.Cells(2, c).Value
+        If Cle <> "" Then
+            MonDico(Cle) = Valeur
+        End If
+    Next c
+    Set get_data_dict = MonDico
 End Function
-
 
 ' =========================================================================
 ' 3. SUBPROCESS
@@ -243,14 +262,14 @@ Sub create_columns(lst_cols As Variant, sheet_new_cols As Worksheet)
     Dim derniereColonne As Long
     Dim colonneAInjecter As Long
     Dim NomColonne As Variant
-	' ajout nouvelle ligne pour noms colonnes
-	sheet_new_cols.Rows(1).Insert Shift:=xlDown
-	
-	colonneAInjecter = 1
+    ' ajout nouvelle ligne pour noms colonnes
+    sheet_new_cols.Rows(1).Insert Shift:=xlDown
+    
+    colonneAInjecter = 1
     
     For Each NomColonne In lst_cols
         sheet_new_cols.Cells(1, colonneAInjecter).Value = NomColonne
-		colonneAInjecter = colonneAInjecter + 1
+        colonneAInjecter = colonneAInjecter + 1
     Next NomColonne
 End Sub
 
@@ -259,46 +278,60 @@ Sub inject_data_in_worbook(path_directory As String, sheet_to_create As String, 
     Dim Dossier As Object
     Dim Fichier As Object
     Dim ClasseurSource As Workbook
-    Dim NomOnglet As String
     Dim FSO As Object
-	Dim NouvelOnglet As Worksheet
-	Dim FichierValideExiste As Boolean
+    Dim NouvelOnglet As Worksheet
+    Dim FichierValideExiste As Boolean
+    Dim wsAncienne As Worksheet
     
     Set FSO = CreateObject("Scripting.FileSystemObject")
     Set Dossier = FSO.GetFolder(path_directory)
-	
-	FichierValideExiste = False
-	
-	For Each Fichier In Dossier.Files
-		If (InStr(Fichier.Name, ".xls") > 0) And (Left(Fichier.Name, 2) <> "~$") Then
-			FichierValideExiste = True
-			Exit For
-		End If
-	Next Fichier
-	
-	If Not FichierValideExiste Then
-		MsgBox "Aucun fichier valide n'a été trouvé pour le traitement.", vbExclamation, "Dossier vide ou invalide"
-		End
-	End If
+    
+    FichierValideExiste = False
+    
+    ' Vérification de l'existence d'un fichier valide
+    For Each Fichier In Dossier.Files
+        If (InStr(Fichier.Name, ".xls") > 0) And (Left(Fichier.Name, 2) <> "~$") Then
+            FichierValideExiste = True
+            Exit For
+        End If
+    Next Fichier
+    
+    If Not FichierValideExiste Then
+        MsgBox "Aucun fichier valide n'a été trouvé pour le traitement.", vbExclamation, "Dossier vide ou invalide"
+        Exit Sub
+    End If
     
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
     
     For Each Fichier In Dossier.Files
         If (InStr(Fichier.Name, ".xls") > 0) And (Left(Fichier.Name, 2) <> "~$") Then
-            ' A. Ouverture de la matrice en arrière-plan
+            ' Ouverture de la matrice en arrière-plan
             Set ClasseurSource = Workbooks.Open(Fichier.Path)
-            ' SÉCURITÉ : Si l'onglet existe déjà, on le supprime pour éviter les doublons
+            
+            ' 1. On supprime d'ABORD l'ancien onglet doublon s'il existait
             On Error Resume Next
-            ClasseurPrincipal.Worksheets(sheet_to_create).Delete
+            Set wsAncienne = ClasseurPrincipal.Worksheets(sheet_to_create)
+            If Not wsAncienne Is Nothing Then wsAncienne.Delete
             On Error GoTo 0
-            ' B. Création du nouvel onglet à la fin
+            
+            ' 2. CORRECTION : UN SEUL ".Add", placé directement au bon endroit
             Set NouvelOnglet = ClasseurPrincipal.Worksheets.Add(After:=ClasseurPrincipal.Sheets(ClasseurPrincipal.Sheets.Count))
+            
+            ' 3. On lui donne son nom
             NouvelOnglet.Name = sheet_to_create
-            ' C. Copie des données
-            ClasseurSource.Sheets(1).UsedRange.Copy Destination:=NouvelOnglet.Range("A1")
-            ' D. Fermeture de la matrice
+
+            ' 4. CORRECTION COPIE : Utilisation de PasteSpecial (évite les plantages inter-classeurs)
+            ClasseurSource.Sheets(1).UsedRange.Copy
+            NouvelOnglet.Range("A1").PasteSpecial Paste:=xlPasteAll
+            Application.CutCopyMode = False ' Vide le presse-papiers
+
+            ' Fermeture de la matrice
             ClasseurSource.Close SaveChanges:=False
+            
+            ' Note : Si vous n'avez qu'un seul fichier à traiter dans le dossier, 
+            ' décommentez la ligne ci-dessous pour éviter qu'un éventuel 2ème fichier n'écrase le 1er.
+            ' Exit For
         End If
     Next Fichier
     
@@ -306,23 +339,22 @@ Sub inject_data_in_worbook(path_directory As String, sheet_to_create As String, 
     Application.ScreenUpdating = True
 End Sub
 
-
-Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_libelle_clean As Range, Cellule_key_table As Range, Cellule_IBAN As Range, Cellule_RIB As Range, Cellule_BIC As Range)
+Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_libelle_clean As Range, Cellule_key_table As Range, Cellule_IBAN As Range, Cellule_RIB As Range, Cellule_BIC As Range, Cellule_date_ech As Range, IBAN As String, RIB As String, BIC As String)
     Const val_not_in_correspondance As String = "##"
     Const char_to_split As String = " ech "
     Const intitule As String = "Intitulé"
-    Const IBAN As String = "IBAN"
-    Const RIB As String = "RIB"
-    Const BIC As String = "BIC"
     
     Dim texte_cell As String
     Dim Cellule As Range
     Dim TableauMorceaux() As String
     Dim PremierePartie As String
+    Dim DateBrute As String
+    Dim date_ech As Date
     Dim CleTrouvee As Range
     ' On mémorise la feuille pour que .Cells sache où écrire précisément
     Dim wsTarget As Worksheet
     Dim wsSearch As Worksheet
+    Dim DateClean As String
     
     Set wsTarget = Plage_libelle.Worksheet
     Set wsSearch = PlageRecherche.Worksheet
@@ -335,9 +367,19 @@ Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_li
         texte_cell = Cellule.Value
         
         If texte_cell <> "" Then
-            If InStr(texte_cell, char_to_split) > 0 Then
+            If InStr(texte_cell, char_to_split) > 1 Then
                 TableauMorceaux = Split(texte_cell, char_to_split)
                 PremierePartie = Trim(TableauMorceaux(0))
+                DateBrute = Replace(Trim(TableauMorceaux(1)), ".", "/")
+                DateClean = Trim(Split(DateBrute, " ")(0))
+                
+                If IsDate(DateClean) Then
+                    date_ech = CDate(DateClean)
+                Else
+                    MsgBox "La date '" & date_ech & "' est mal formée pour le libellé '" & texte_cell & "', le format doit être 'jj.mm.yyyy'.", vbCritical, "Mauvais format date"
+                    End
+                End If
+                
                 ' On récupère le numéro de la ligne actuelle
                 Dim r As Long
                 r = Cellule.Row
@@ -350,6 +392,8 @@ Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_li
                 If Not CleTrouvee Is Nothing Then
                     wsTarget.Cells(r, Cellule_key_table.Column).Value = wsSearch.Cells(CleTrouvee.Row, letter_colonne(intitule, wsSearch).Column).Value
                     wsTarget.Cells(r, Cellule_IBAN.Column).Value = wsSearch.Cells(CleTrouvee.Row, letter_colonne(IBAN, wsSearch).Column).Value
+                    
+                    wsTarget.Cells(r, Cellule_date_ech.Column).Value = date_ech
                 
                     With wsTarget.Cells(r, Cellule_RIB.Column)
                         .NumberFormat = "@"
@@ -372,26 +416,111 @@ Sub generate_matrice(Plage_libelle As Range, PlageRecherche As Range, Cellule_li
 End Sub
 
 
-Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_date As Range, start_row As Long, _
-                credit As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String, _
-                date_libelle As String, ByRef number_of_transactions As Long, ByRef total_payments As Double, DateDebutChoisie As Date, DateFinChoisie As Date, _
-				Compte_export_achat As String, data_dict As Object)
+Sub get_debit(Plage_debit As Range, PlageRecherche As Range, Cellule_libelle As Range, Cellule_IBAN As Range, Cellule_RIB As Range, Cellule_BIC As Range, Cellule_date_ech As Range, Cellule_key_table As Range, IBAN As String, RIB As String, BIC As String)
+                
+    ' si on a une valeur dans la colonne "débit" on déclenche la recherche du libellé correspondant, ex : BONDU AV2072131 SF71668
+    ' on doit retrouver BONDU, on reprend l'onglet "table de correspondance" et la colonne "correspondance coala"
+    ' on itère sur chaque valeur pour vérifier si la valeur de la cellule se retrouve dans notre libellé de Débit
+    ' si on le retrouve, on injecte les valeurs bancaires associées
+    Const char_to_split As String = " ech "
+    
+    Dim Cellule As Range
+    Dim r As Long
+    Dim correspondance_coala As Range
+    Dim NomCorrespondance As String
+    Dim texte_libelle As String
+    Dim TableauMorceaux() As String
+    Dim DateBrute As String
+    Dim date_ech As Date
+    Dim DateClean As String
+    Dim search_IBAN As Range
+    Dim search_RIB As Range
+    Dim search_BIC As Range
+    
+    Set wsTarget = Plage_debit.Worksheet
+    Set wsSearch = PlageRecherche.Worksheet
+    
+    Set search_IBAN = letter_colonne(IBAN, wsSearch)
+    Set search_RIB = letter_colonne(RIB, wsSearch)
+    Set search_BIC = letter_colonne(BIC, wsSearch)
+    
+    For Each Cellule In Plage_debit
+        texte_cell = Cellule.Value
+        
+        r = Cellule.Row
+        texte_libelle = Trim(CStr(wsTarget.Cells(r, Cellule_libelle.Column).Value))
+
+        If texte_cell <> 0 Then
+            'traitement : si débit différent de 0 on déclenche la recherche du libellé dans correspondance coala de notre table de correspondance
+            For Each correspondance_coala In PlageRecherche
+            
+                NomCorrespondance = Trim(CStr(correspondance_coala.Value))
+                If NomCorrespondance <> "" And NomCorrespondance <> "##" Then
+                
+                    If InStr(1, texte_libelle, NomCorrespondance) > 0 And InStr(texte_libelle, char_to_split) > 1 Then
+                        TableauMorceaux = Split(texte_libelle, char_to_split)
+                        DateBrute = Replace(Trim(TableauMorceaux(1)), ".", "/")
+                        DateClean = Trim(Split(DateBrute, " ")(0))
+                        
+                        If IsDate(DateClean) Then
+                            date_ech = CDate(DateClean)
+                        Else
+                            MsgBox "La date '" & date_ech & "' est mal formée pour le libellé '" & texte_libelle & "', le format doit être 'jj.mm.yyyy'.", vbCritical, "Mauvais format date"
+                            End
+                        End If
+                    
+                        wsTarget.Cells(r, Cellule_IBAN.Column).Value = wsSearch.Cells(correspondance_coala.Row, search_IBAN.Column).Value
+                        
+                        With wsTarget.Cells(r, Cellule_RIB.Column)
+                            .NumberFormat = "@"
+                            .Value = wsSearch.Cells(correspondance_coala.Row, search_RIB.Column).Value
+                        End With
+                        
+                        wsTarget.Cells(r, Cellule_BIC.Column).Value = wsSearch.Cells(correspondance_coala.Row, search_BIC.Column).Value
+                        
+                        wsTarget.Cells(r, Cellule_key_table.Column).Value = NomCorrespondance
+                        
+                        wsTarget.Cells(r, Cellule_date_ech.Column).Value = date_ech
+                        
+                    End If
+                End If
+            Next correspondance_coala
+        End If
+        
+    Next Cellule
+    
+End Sub
+
+
+Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As Worksheet, Cellule_date As Range, Cellule_libelle_clean As Range, start_row As Long, _
+                credit As String, debit_lib As String, BIC_fournisseur As String, key_table As String, IBAN_fournisseur As String, RIB_fournisseur As String, _
+                date_libelle As String, ByRef number_of_transactions As Long, ByRef total_payments As Double, ByRef paiement_dict As Object, DateDebutChoisie As Date, DateFinChoisie As Date, _
+                Compte_export_achat As String, data_dict As Object)
     
     Const NS_PAIN001 As String = "urn:iso:std:iso:20022:tech:xsd:pain.001.001.02"
 
-	Dim ColBic As Long
-	Dim ColKeyTable As Long
-	Dim ColIBAN As Long
-	Dim ColRIB As Long
-	Dim ColDate As Long
+    Dim ColBic As Long
+    Dim ColKeyTable As Long
+    Dim ColIBAN As Long
+    Dim ColRIB As Long
+    Dim ColDate As Long
     Dim Plage_date As Range
     Dim plage_cellule_rib As Range
     Dim texte_cell As String
     Dim r As Long
     Dim valeur_credit As Double
+    Dim valeur_debit As Double
     Dim ColCreditNum As Long
+    Dim ColDebitNum As Long
     Dim Id_transac As String
-	Dim valeur_date As Date
+    Dim valeur_date As Date
+    Dim DebitDico As Object
+    Dim DebitKeyDico As Object
+    Dim SousDico As Object
+    Dim key_deb As String
+    Dim debit As Variant
+    Dim montantVirement As Double
+    Dim TexteMessage As String
     Dim CheminFichier As String
     CheminFichier = CheminDossierOut & xml_name
     
@@ -473,7 +602,7 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     Dim PmtInfId As Object
     Set PmtInfId = DocXml.createNode(1, "PmtInfId", NS_PAIN001)
-	Randomize
+    Randomize
     PmtInfId.Text = data_dict("Nm_client") & Format(Now, "yymmddhhmmss") & Int(900 * Rnd + 100)
     PmtInf.appendChild PmtInfId
     
@@ -555,36 +684,56 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     PmtInf.appendChild ChrgBr
     
     Set Plage_date = Plage_to_check(Cellule_date, export_achat, export_achat.Name, start_row)
-	
+    
     ColBic = letter_colonne(BIC_fournisseur, export_achat).Column
     ColKeyTable = letter_colonne(key_table, export_achat).Column
     ColIBAN = letter_colonne(IBAN_fournisseur, export_achat).Column
     ColRIB = letter_colonne(RIB_fournisseur, export_achat).Column
     ColCreditNum = letter_colonne(credit, export_achat).Column
+    ColDebitNum = letter_colonne(debit_lib, export_achat).Column
+    
+    ColDate = letter_colonne(date_libelle, export_achat).Column
+    ColCompte = letter_colonne(Compte_export_achat, export_achat).Column
+    Set DebitDico = CreateObject("Scripting.Dictionary")
+    Set paiement_dict = CreateObject("Scripting.Dictionary")
 	
-	ColDate = letter_colonne(date_libelle, export_achat).Column
-	ColCompte = letter_colonne(Compte_export_achat, export_achat).Column
-	
+	' on boucle une première fois pour obtenir l'intégralité des débits
+	For Each plage_cellule_date In Plage_date
+		r = plage_cellule_date.Row
+		valeur_debit = CDbl(export_achat.Cells(r, ColDebitNum).Value)
+		valeur_date = CDate(export_achat.Cells(r, ColDate).Value)
+        valeur_compte = export_achat.Cells(r, ColCompte).Value
+        valeur_RIB = export_achat.Cells(r, ColRIB).Value
+		
+		If valeur_RIB <> "" And valeur_debit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie And valeur_compte Like "F*" Then
+            key_deb = export_achat.Cells(r, Cellule_libelle_clean.Column).Value
+            
+            Set DebitKeyDico = CreateObject("Scripting.Dictionary")
+            DebitKeyDico("label") = export_achat.Cells(r, ColKeyTable).Value
+            DebitKeyDico("montant") = valeur_debit
+            Set DebitDico(key_deb) = DebitKeyDico
+        End If
+		
+	Next plage_cellule_date
+    
     ' boucle pour générer l'intégralité des virements à effectuer
     For Each plage_cellule_date In Plage_date
-        'texte_cell = plage_cellule_rib.Value
         r = plage_cellule_date.Row
         
         ' je caste en double
         valeur_credit = CDbl(export_achat.Cells(r, ColCreditNum).Value)
 
-		' On récupère la date de la ligne actuelle
+        ' On récupère la date de la ligne actuelle
         valeur_date = CDate(export_achat.Cells(r, ColDate).Value)
-		valeur_compte = export_achat.Cells(r, ColCompte).Value
-		valeur_RIB = export_achat.Cells(r, ColRIB).Value
+        valeur_compte = export_achat.Cells(r, ColCompte).Value
+        valeur_RIB = export_achat.Cells(r, ColRIB).Value
+
         
-        'If texte_cell <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie And valeur_compte Like "F*" Then
-		If valeur_RIB <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie And valeur_compte Like "F*" Then
+        If valeur_RIB <> "" And valeur_credit <> 0 And valeur_date >= DateDebutChoisie And valeur_date <= DateFinChoisie And valeur_compte Like "F*" Then
         
             valeur_bic = export_achat.Cells(r, ColBic).Value
             valeur_KeyTable = export_achat.Cells(r, ColKeyTable).Value
             valeur_IBAN = export_achat.Cells(r, ColIBAN).Value
-            'valeur_RIB = export_achat.Cells(r, ColRIB).Value
             
             Dim CdtTrfTxInf As Object
             Set CdtTrfTxInf = DocXml.createNode(1, "CdtTrfTxInf", NS_PAIN001)
@@ -609,7 +758,40 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             Dim InstdAmt As Object
             Set InstdAmt = DocXml.createNode(1, "InstdAmt", NS_PAIN001)
             InstdAmt.setAttribute "Ccy", "EUR"
-            InstdAmt.Text = Replace(CStr(valeur_credit), ",", ".")
+            
+            ' 1. On crée une variable de travail initialisée avec le montant du crédit d'origine
+            Dim MontantRestantAPayer As Double
+            MontantRestantAPayer = CDbl(valeur_credit)
+            
+            ' Sécurisation de la clé avec le numéro de ligne 'r' pour éviter les écrasements
+            paiement_dict(valeur_KeyTable & "_" & r & "_" & Replace(CStr(MontantRestantAPayer), ",", ".")) = valeur_KeyTable & " : " & Replace(CStr(MontantRestantAPayer), ",", ".")
+            
+            Dim CleASupprimer As String
+            CleASupprimer = ""
+            
+            For Each debit In DebitDico.Keys
+                ' On compare avec notre variable évolutive MontantRestantAPayer
+				
+                If DebitDico(debit)("label") = valeur_KeyTable And DebitDico(debit)("montant") < MontantRestantAPayer Then
+                    ' On déduit le montant de notre variable de travail
+                    MontantRestantAPayer = MontantRestantAPayer - DebitDico(debit)("montant")
+                    
+                    ' On enregistre la ligne de déduction dans le dictionnaire de résumé
+                    paiement_dict(valeur_KeyTable & "_deb_" & DebitDico(debit)("montant")) = valeur_KeyTable & " : -" & DebitDico(debit)("montant")
+                    
+                    CleASupprimer = debit
+                    Exit For
+                End If
+            Next debit
+            
+            ' Suppression sécurisée après la boucle
+            If CleASupprimer <> "" Then
+                DebitDico.Remove CleASupprimer
+            End If
+            
+            ' 2. C'est SEULEMENT ICI, à la fin, qu'on attribue le montant final (avec le point XML) au nœud XML
+            InstdAmt.Text = Replace(CStr(MontantRestantAPayer), ",", ".")
+            
             Amt.appendChild InstdAmt
             
             Dim CdtrAgt As Object
@@ -679,9 +861,9 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
             RmtInf.appendChild Ustrd
             
             number_of_transactions = number_of_transactions + 1
-            total_payments = total_payments + valeur_credit
+            total_payments = total_payments + MontantRestantAPayer
             
-            Id_transac = number_of_transactions & "_" & CStr(Fix(valeur_credit)) & "_" & Format(Now, "yyyymmdd_hhmmss")
+            Id_transac = number_of_transactions & "_" & CStr(Fix(MontantRestantAPayer)) & "_" & Format(Now, "yyyymmdd_hhmmss")
             InstrId.Text = Id_transac
             Ustrd.Text = Id_transac
             EndToEndId.Text = Id_transac
@@ -691,6 +873,16 @@ Sub generate_xml(CheminDossierOut As String, xml_name As String, export_achat As
     
     NbOfTxs.Text = CStr(number_of_transactions)
     CtrlSum.Text = Replace(Format(total_payments, "0.00"), ",", ".")
+    
+    If Not DebitDico Is Nothing And DebitDico.Count > 0 Then
+        For Each debit In DebitDico.Keys
+            Set SousDico = DebitDico(debit)
+            TexteMessage = TexteMessage & "• Clé : " & debit & _
+                           " | Label : " & SousDico("label") & _
+                           " | Montant : " & Format(SousDico("montant"), "#,##0.00 €") & vbCrLf
+        Next debit
+        MsgBox "Le dictionnaire contient les débits suivants qui n'ont pas été déduits" & TexteMessage
+    End If
     
     DocXml.Save CheminFichier
 End Sub
@@ -727,6 +919,4 @@ Sub archive_file(directory_out_archive As String, CheminDossierIn As String, Che
     FSO.CopyFile Source:=CheminFichierXml, Destination:=CheminDestination & "\" & xml_name
     
 End Sub
-
-
 
